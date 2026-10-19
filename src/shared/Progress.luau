@@ -103,21 +103,7 @@ function Progress.buyResearch(state: State, key: string): (boolean, string?)
 	return true, nil
 end
 
--- 연구 포인트: 환생 1회당 1 + 누적 보너스
-function Progress.researchPoints(state: State): number
-	local earned = state.rebirths + math.max(0, state.rebirths - 5) -- 6회차부터 +1씩
-	local spent = 0
-	for key, lv in state.research do
-		local def = Progress.RESEARCH[key]
-		if def then
-			for i = 1, lv do
-				spent += math.floor(def.baseCost * (i ^ 1.5))
-			end
-		end
-	end
-	return math.max(0, earned - spent)
-end
-
+-- 소비한 연구 포인트 합계
 function Progress.totalResearchSpent(state: State): number
 	local spent = 0
 	for key, lv in state.research do
@@ -129,6 +115,12 @@ function Progress.totalResearchSpent(state: State): number
 		end
 	end
 	return spent
+end
+
+-- 연구 포인트: 환생 1회당 1 + 6회차부터 누적 보너스
+function Progress.researchPoints(state: State): number
+	local earned = state.rebirths + math.max(0, state.rebirths - 5)
+	return math.max(0, earned - Progress.totalResearchSpent(state))
 end
 
 -- 배율 조회 (1.0 = 기본)

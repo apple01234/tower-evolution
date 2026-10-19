@@ -20,6 +20,7 @@ Config.INVENTORY_CAP = 60
 Config.MAX_GOLD = 1e15
 
 -- 웨이브
+Config.BASE_HP = 100 -- 기지 체력
 Config.WAVE_BREAK_SECONDS = 6
 Config.BOSS_EVERY = 5 -- 5웨이브마다 보스
 Config.ENEMY_HP_BASE = 30

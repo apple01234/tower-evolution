@@ -15,10 +15,12 @@ local EVENTS = {
 	"RequestRebirth", -- () 환생
 	"RequestResearch", -- (key: string) 연구 구매
 	"RequestZone", -- (zoneId: string) 지역 이동
+	"RequestClaimMission", -- (key: string) 미션 보상 수령
 
 	"StateSync", -- (state) 서버 -> 클라이언트
 	"WaveSync", -- (wave, isBoss, bossHp, bossMaxHp)
 	"ProgressSync", -- (progress) 서버 -> 클라이언트
+	"MissionSync", -- (missions) 서버 -> 클라이언트
 	"Notify", -- (msg, kind)
 }
 

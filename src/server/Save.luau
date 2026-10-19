@@ -1,10 +1,17 @@
 --!strict
 -- 데이터 저장. 세션 간 성장 유지. 실패 시 재시도, 퇴장 시 저장.
+-- 정규화 로직은 Sanitize.luau 에 있다.
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
-local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
-local Inventory = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Inventory"))
-local Progress = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Progress"))
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Inventory = require(Shared:WaitForChild("Inventory"))
+local Missions = require(Shared:WaitForChild("Missions"))
+local Progress = require(Shared:WaitForChild("Progress"))
+
+local Sanitize = require(script.Parent:WaitForChild("Sanitize"))
 
 local Save = {}
 
@@ -19,101 +26,54 @@ end
 
 local cache: { [number]: Inventory.State } = {}
 local progressCache: { [number]: Progress.State } = {}
+local missionCache: { [number]: Missions.State } = {}
 
-local function defaultState(): Inventory.State
-	local st = Inventory.new(Config.START_GOLD)
-	Inventory.add(st, "ApprenticeTurret")
-	return st
-end
+-- Battle.init()이 주입한다 (순환 require 회피)
+Save._events = nil :: any
+
+local RETRY = 3
 
 local function keyOf(userId: number): string
 	return "p_" .. tostring(userId)
 end
 
--- 저장 데이터 -> 상태 (구조 검증 포함)
-local function sanitize(raw: any): Inventory.State
-	local st = defaultState()
-	if type(raw) ~= "table" then
-		return st
+-- DataStore 읽기 (재시도)
+local function readStore(userId: number, name: string): (boolean, any)
+	if not store then
+		return false, nil
 	end
-	local gold = tonumber(raw.gold) or Config.START_GOLD
-	st.gold = math.clamp(gold, 0, Config.MAX_GOLD)
-
-	if type(raw.slots) == "table" then
-		st.slots = {}
-		for _, s in raw.slots do
-			if type(s) == "table" and type(s.key) == "string" and type(s.uid) == "string" then
-				table.insert(st.slots, { uid = s.uid, key = s.key, level = tonumber(s.level) or 1 })
-			end
+	local success, result = false, nil
+	for attempt = 1, RETRY do
+		local ds = store
+		success, result = pcall(function()
+			return ds:GetAsync(keyOf(userId))
+		end)
+		if success then
+			return true, result
 		end
+		warn(string.format("[Save] 로드 실패(시도 %d) %s: %s", attempt, name, tostring(result)))
+		task.wait(attempt * 0.5)
 	end
-	st.nextUid = tonumber(raw.nextUid) or (#st.slots + 1)
-	return st
-end
-
--- 영구 성장 데이터 복원 (환생/연구/도감/지역)
-local function sanitizeProgress(raw: any): Progress.State
-	local ps = Progress.new(Config.START_GOLD)
-	if type(raw) ~= "table" then
-		return ps
-	end
-	ps.rebirths = math.max(0, math.floor(tonumber(raw.rebirths) or 0))
-	ps.maxWaveEver = math.max(0, math.floor(tonumber(raw.maxWaveEver) or 0))
-	ps.wave = math.max(0, math.floor(tonumber(raw.wave) or 0))
-
-	if type(raw.research) == "table" then
-		for k, v in raw.research do
-			if type(k) == "string" and Progress.RESEARCH[k] then
-				local lv = math.max(0, math.floor(tonumber(v) or 0))
-				ps.research[k] = math.min(lv, Progress.RESEARCH[k].maxLevel)
-			end
-		end
-	end
-	if type(raw.collection) == "table" then
-		for k, v in raw.collection do
-			if type(k) == "string" and v == true then
-				ps.collection[k] = true
-			end
-		end
-	end
-	if type(raw.zoneUnlocked) == "table" then
-		for k, v in raw.zoneUnlocked do
-			if type(k) == "string" and v == true then
-				ps.zoneUnlocked[k] = true
-			end
-		end
-	end
-	return ps
+	return false, result
 end
 
 function Save.load(player: Player): Inventory.State
-	if cache[player.UserId] then
-		return cache[player.UserId]
+	local cached = cache[player.UserId]
+	if cached then
+		return cached
 	end
-	local st = defaultState()
-	if store then
-		-- DataStore 호출은 실패할 수 있으므로 재시도 (공식 문서 권장 패턴)
-		local success, result = false, nil
-		for attempt = 1, 3 do
-			local ds = store
-			success, result = pcall(function()
-				return ds:GetAsync(keyOf(player.UserId))
-			end)
-			if success then
-				break
-			end
-			warn("[Save] 로드 실패(시도 " .. attempt .. ") " .. player.Name .. ": " .. tostring(result))
-			task.wait(attempt * 0.5)
-		end
-		if success then
-			st = sanitize(result)
-			progressCache[player.UserId] = sanitizeProgress(result)
-		else
-			warn("[Save] 로드 실패 " .. player.Name .. ": " .. tostring(result))
-		end
+
+	local st = Sanitize.defaultInventory()
+	local success, raw = readStore(player.UserId, player.Name)
+	if success then
+		st = Sanitize.inventory(raw)
+		progressCache[player.UserId] = Sanitize.progress(raw)
+		missionCache[player.UserId] = Sanitize.missions(raw and raw.missions, os.time())
 	end
+
 	cache[player.UserId] = st
-	progressCache[player.UserId] = progressCache[player.UserId] or sanitizeProgress(nil)
+	progressCache[player.UserId] = progressCache[player.UserId] or Sanitize.progress(nil)
+	missionCache[player.UserId] = missionCache[player.UserId] or Missions.new(os.time())
 	return st
 end
 
@@ -125,7 +85,6 @@ function Save.getProgress(player: Player): Progress.State?
 	return progressCache[player.UserId]
 end
 
--- 진행 상태를 확보 (없으면 생성)
 function Save.ensureProgress(player: Player): Progress.State
 	local ps = progressCache[player.UserId]
 	if not ps then
@@ -137,56 +96,63 @@ end
 
 function Save.save(player: Player): boolean
 	local st = cache[player.UserId]
-	if not st then
+	if not st or not store then
 		return false
 	end
-	if not store then
-		return false
-	end
-	-- 재시도 3회
-	for attempt = 1, 3 do
+
+	local payload = Sanitize.payload(st, progressCache[player.UserId], missionCache[player.UserId])
+	for attempt = 1, RETRY do
 		local ds = store
 		local success, result = pcall(function()
-			local ps = progressCache[player.UserId]
-			ds:SetAsync(keyOf(player.UserId), {
-				gold = st.gold,
-				slots = st.slots,
-				nextUid = st.nextUid,
-				version = 2, -- v2: progress 필드 추가
-				rebirths = ps and ps.rebirths or 0,
-				maxWaveEver = ps and ps.maxWaveEver or 0,
-				wave = ps and ps.wave or 0,
-				research = ps and ps.research or {},
-				collection = ps and ps.collection or {},
-				zoneUnlocked = ps and ps.zoneUnlocked or {},
-			})
+			ds:SetAsync(keyOf(player.UserId), payload)
 		end)
 		if success then
 			return true
 		end
-		warn("[Save] 저장 실패(시도 " .. attempt .. ") " .. player.Name .. ": " .. tostring(result))
+		warn(string.format("[Save] 저장 실패(시도 %d) %s: %s", attempt, player.Name, tostring(result)))
 		task.wait(attempt * 0.5)
 	end
 	return false
 end
 
--- Battle.init()이 주입한다 (순환 require 회피)
-Save._events = nil :: any
+function Save.getMissions(player: Player): Missions.State?
+	return missionCache[player.UserId]
+end
 
--- 진행 상태를 클라이언트로 전송 (Research 비용/배율 포함)
+function Save.ensureMissions(player: Player): Missions.State
+	local ms = missionCache[player.UserId]
+	if not ms then
+		ms = Missions.new(os.time())
+		missionCache[player.UserId] = ms
+	end
+	if Missions.checkReset(ms, os.time()) then
+		Save.syncMissions(player)
+	end
+	return ms
+end
+
+function Save.syncMissions(player: Player)
+	local ms = missionCache[player.UserId]
+	local events = Save._events
+	if not ms or not events then
+		return
+	end
+	events.MissionSync:FireClient(player, Missions.snapshot(ms))
+end
+
+-- 진행 상태 + 미션을 클라이언트로 전송
 function Save.syncProgress(player: Player)
 	local ps = progressCache[player.UserId]
-	if not ps then
-		return
-	end
 	local events = Save._events
-	if not events then
+	if not ps or not events then
 		return
 	end
+
 	local costs = {}
 	for _, key in Progress.RESEARCH_ORDER do
 		costs[key] = Progress.researchCost(key, Progress.researchLevel(ps, key))
 	end
+
 	events.ProgressSync:FireClient(player, {
 		rebirths = ps.rebirths,
 		points = Progress.researchPoints(ps),
@@ -201,11 +167,13 @@ function Save.syncProgress(player: Player)
 		summonMult = Progress.summonCostMultiplier(ps),
 		summary = Progress.summary(ps),
 	})
+	Save.syncMissions(player)
 end
 
 function Save.release(player: Player)
 	cache[player.UserId] = nil
 	progressCache[player.UserId] = nil
+	missionCache[player.UserId] = nil
 end
 
 Players.PlayerRemoving:Connect(function(player)
