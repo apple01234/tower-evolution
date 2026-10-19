@@ -6,6 +6,10 @@ local WorldSetup = {}
 
 WorldSetup.ORIGIN = Vector3.new(0, 0, 0)
 
+-- 경로 길이는 불변이므로 최초 1회만 계산해 캐시한다.
+-- (Heartbeat마다 7개 세그먼트를 재계산하던 비용 제거)
+local _pathLenCache: number? = nil
+
 -- 그리드(col,row) -> 월드 Vector3 (셀 중심)
 function WorldSetup.cellToWorld(col: number, row: number): Vector3
 	local x = (col - (Config.GRID_COLS - 1) / 2) * Config.CELL_SIZE
@@ -22,13 +26,17 @@ function WorldSetup.pathPoints(): { Vector3 }
 	return pts
 end
 
--- 경로 총 길이 (스폰 위치 계산용)
+-- 경로 총 길이 (스폰 위치 계산용) — 불변이므로 캐시
 function WorldSetup.pathLength(): number
+	if _pathLenCache then
+		return _pathLenCache
+	end
 	local pts = WorldSetup.pathPoints()
 	local total = 0
 	for i = 2, #pts do
 		total += (pts[i] - pts[i - 1]).Magnitude
 	end
+	_pathLenCache = total
 	return total
 end
 

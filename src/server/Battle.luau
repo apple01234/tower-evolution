@@ -27,6 +27,10 @@ local waveActive = false
 local baseHp = 100
 local baseMaxHp = 100
 
+-- StateSync 스로틀 (초당 과다 전송 방지 — RemoteEvent#Throttling 공식 권장)
+local SYNC_INTERVAL = 0.2 -- 5Hz
+local syncAccum = 0
+
 -- 배치된 타워: [playerUserId] = { [cellKey] = {uid, key, cooldown, model} }
 local placed: { [number]: { [string]: any } } = {}
 
@@ -185,14 +189,20 @@ local function updateTowers(dt: number)
 	end
 
 	-- 상태 동기화 (골드 변경 반영)
-	for _, p in Players:GetPlayers() do
-		local st = Save.get(p)
-		if st then
-			events.StateSync:FireClient(p, {
-				gold = st.gold,
-				slots = st.slots,
-				wave = currentWave,
-			})
+	-- 공식 문서: "To avoid throttling and latency issues, limit recurring remote events
+	-- whenever possible." (RemoteEvent#Throttling) → Heartbeat마다 전송하지 않고 5Hz로 제한.
+	syncAccum += dt
+	if syncAccum >= SYNC_INTERVAL then
+		syncAccum = 0
+		for _, p in Players:GetPlayers() do
+			local st = Save.get(p)
+			if st then
+				events.StateSync:FireClient(p, {
+					gold = st.gold,
+					slots = st.slots,
+					wave = currentWave,
+				})
+			end
 		end
 	end
 end

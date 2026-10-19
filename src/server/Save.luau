@@ -55,9 +55,19 @@ function Save.load(player: Player): Inventory.State
 	end
 	local st = defaultState()
 	if store then
-		local success, result = pcall(function()
-			return (store :: DataStore):GetAsync(keyOf(player.UserId))
-		end)
+		-- DataStore 호출은 실패할 수 있으므로 재시도 (공식 문서 권장 패턴)
+		local success, result = false, nil
+		for attempt = 1, 3 do
+			local ds = store
+			success, result = pcall(function()
+				return ds:GetAsync(keyOf(player.UserId))
+			end)
+			if success then
+				break
+			end
+			warn("[Save] 로드 실패(시도 " .. attempt .. ") " .. player.Name .. ": " .. tostring(result))
+			task.wait(attempt * 0.5)
+		end
 		if success then
 			st = sanitize(result)
 		else
