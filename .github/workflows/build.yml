@@ -17,6 +17,10 @@ env:
 jobs:
   verify-and-publish:
     runs-on: ubuntu-latest
+    # 릴리스에 .rbxlx 를 첨부하려면 contents: write 가 필요하다.
+    # 기본 GITHUB_TOKEN 은 read-only 라서 403 Resource not accessible by integration 이 난다.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -81,7 +85,7 @@ jobs:
 
           - 에셋 24종 파일 내장 (런타임 다운로드 불필요)
           - 문법/구조/에셋클래스/로직/세계관 검증 통과" \
-            --repo "${GITHUB_REPOSITORY}" || true
+            --repo "${GITHUB_REPOSITORY}"
 
       # 게시 단계: 수동 실행 + publish=true 일 때만
       # (secrets는 if: 표현식에서 직접 참조 불가 → env로 주입 후 step 내부에서 검사)
