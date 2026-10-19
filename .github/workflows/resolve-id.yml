@@ -1,0 +1,41 @@
+name: Resolve Roblox ID
+
+on:
+  workflow_dispatch:
+    inputs:
+      id:
+        description: "Place ID 또는 Universe ID"
+        required: true
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve
+        env:
+          ID: ${{ inputs.id }}
+        run: |
+          set -uo pipefail
+          echo "입력값: $ID"
+
+          echo "--- A) Place ID -> Universe ID (공개 엔드포인트) ---"
+          A=$(curl -sS -w "\n%{http_code}" --max-time 30 \
+            "https://apis.roblox.com/universes/v1/places/${ID}/universe")
+          echo "$A"
+
+          echo "--- B) Universe ID 으로 조회 (공개) ---"
+          B=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 \
+            "https://games.roblox.com/v1/games?universeIds=${ID}")
+          echo "games API HTTP=$B"
+
+          echo "--- C) Universe 상세 ---"
+          curl -sS --max-time 30 "https://games.roblox.com/v1/games?universeIds=${ID}" | head -c 600
+          echo
+
+          echo "--- D) Place 상세 (universe 경유) ---"
+          UNI=$(echo "$A" | head -n -1 | python3 -c "import sys,json;print(json.load(sys.stdin).get('universeId',''))" 2>/dev/null || true)
+          echo "해석된 universeId=${UNI:-<없음>}"
+          if [ -n "$UNI" ]; then
+            curl -sS --max-time 30 "https://games.roblox.com/v1/games?universeIds=${UNI}" | head -c 600
+            echo
+          fi
