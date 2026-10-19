@@ -13,6 +13,7 @@ local Net = require(Shared:WaitForChild("Net"))
 
 local Save = require(script.Parent:WaitForChild("Save"))
 local WorldSetup = require(script.Parent:WaitForChild("WorldSetup"))
+local AssetLoader = require(script.Parent:WaitForChild("AssetLoader"))
 
 local Battle = {}
 
@@ -55,15 +56,35 @@ local function newEnemy(wave: number, isBoss: boolean, zone: any)
 		end
 	end
 
-	local model = Instance.new("Part")
-	model.Name = isBoss and "Boss" or "Enemy"
-	model.Shape = Enum.PartType.Ball
-	model.Size = isBoss and Vector3.new(5, 5, 5) or Vector3.new(2.5, 2.5, 2.5)
-	model.Color = isBoss and Color3.fromRGB(220, 40, 40) or Color3.fromRGB(200, 120, 60)
-	model.Material = Enum.Material.Neon
-	model.Anchored = true
-	model.CanCollide = false
-	model.Parent = enemyFolder
+	-- 마켓플레이스 모델 사용, 실패 시 절차적 폴백
+	local assetModel = AssetLoader.template(isBoss and "enemy_alt" or "enemy")
+	local model: Instance
+	if assetModel and assetModel:IsA("Model") then
+		model = assetModel
+		model.Name = isBoss and "Boss" or "Enemy"
+		local target = isBoss and Vector3.new(6, 6, 6) or Vector3.new(3, 3, 3)
+		AssetLoader.fit(model, target)
+		-- 물리/충돌 정리: 모든 파트 고정
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Anchored = true
+				d.CanCollide = false
+				d.CanTouch = false
+			end
+		end
+		model.Parent = enemyFolder
+	else
+		local fallback = Instance.new("Part")
+		fallback.Name = isBoss and "Boss" or "Enemy"
+		fallback.Shape = Enum.PartType.Ball
+		fallback.Size = isBoss and Vector3.new(5, 5, 5) or Vector3.new(2.5, 2.5, 2.5)
+		fallback.Color = isBoss and Color3.fromRGB(220, 40, 40) or Color3.fromRGB(200, 120, 60)
+		fallback.Material = Enum.Material.Neon
+		fallback.Anchored = true
+		fallback.CanCollide = false
+		fallback.Parent = enemyFolder
+		model = fallback
+	end
 
 	local id = nextEnemyId
 	nextEnemyId += 1
@@ -149,7 +170,8 @@ local function updateTowers(dt: number)
 				continue
 			end
 
-			local towerPos = t.model and t.model.Position or WorldSetup.ORIGIN
+			-- 배치 시 계산한 위치를 재사용 (Model은 Position 속성이 없음)
+			local towerPos = t.pos or WorldSetup.ORIGIN
 
 			-- 살아있는 적 목록
 			local list: { any } = {}
@@ -235,7 +257,13 @@ local function updateEnemies(dt: number)
 		local t = math.clamp(e.pos / pathLen, 0, 1)
 		local wp = WorldSetup.pointAt(t)
 		if e.model then
-			e.model.Position = wp + Vector3.new(0, e.isBoss and 3 or 1.5, 0)
+			local lift = e.isBoss and 3 or 1.5
+			if e.model:IsA("Model") then
+				-- Model은 Position 속성이 없다 → PivotTo 사용
+				e.model:PivotTo(CFrame.new(wp + Vector3.new(0, lift, 0)))
+			else
+				e.model.Position = wp + Vector3.new(0, lift, 0)
+			end
 		end
 	end
 end
@@ -399,26 +427,57 @@ function Battle.init()
 			return
 		end
 		local wp = WorldSetup.cellToWorld(col, row)
-		local model = Instance.new("Part")
-		model.Name = owned.key
-		model.Size = Vector3.new(3, 4, 3)
-		model.Position = wp + Vector3.new(0, 2, 0)
-		model.Anchored = true
-		model.CanCollide = false
-		model.Material = Enum.Material.Metal
-		model.Color = Color3.fromRGB(90, 140, 220)
-		model.Parent = workspace.TowerArena:FindFirstChild("Towers") or (function()
+		local towerFolder = workspace.TowerArena:FindFirstChild("Towers") or (function()
 			local f = Instance.new("Folder")
 			f.Name = "Towers"
 			f.Parent = workspace.TowerArena
 			return f
 		end)()
 
+		-- 마켓플레이스 모델 사용, 실패 시 파트 폴백
+		local assetModel = AssetLoader.template(owned.key)
+		local model: Instance
+		if assetModel and assetModel:IsA("Model") then
+			model = assetModel
+			model.Name = owned.key
+			AssetLoader.fit(model, Vector3.new(4, 6, 4))
+			for _, d in model:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.Anchored = true
+					d.CanCollide = false
+					d.CanTouch = false
+				end
+			end
+			AssetLoader.place(model, wp)
+			model.Parent = towerFolder
+		else
+			local fallback = Instance.new("Part")
+			fallback.Name = owned.key
+			fallback.Size = Vector3.new(3, 4, 3)
+			fallback.Position = wp + Vector3.new(0, 2, 0)
+			fallback.Anchored = true
+			fallback.CanCollide = false
+			fallback.Material = Enum.Material.Metal
+			fallback.Color = Color3.fromRGB(90, 140, 220)
+			fallback.Parent = towerFolder
+			model = fallback
+		end
+
+		-- 사거리 판정용 위치 (Model은 Position 속성이 없으므로 미리 확정)
+		local towerPos: Vector3
+		if model:IsA("Model") then
+			local okBox, bbox = pcall(model.GetBoundingBox, model)
+			towerPos = okBox and bbox.Position or (wp + Vector3.new(0, 2, 0))
+		else
+			towerPos = (model :: BasePart).Position
+		end
+
 		placed[player.UserId][ck] = {
 			uid = uid,
 			key = owned.key,
 			cooldown = 0,
 			model = model,
+			pos = towerPos,
 		}
 		-- 인벤토리에서 제거 (배치된 타워는 별도 관리)
 		Inventory.removeUid(st, uid)
