@@ -31,21 +31,23 @@ function TowerModel.build(key: string, wp: Vector3): (Instance, Vector3)
 	local folder = towersFolder()
 
 	local assetModel = AssetLoader.template(key)
-	if assetModel and assetModel:IsA("Model") then
+	if assetModel then
 		assetModel.Name = key
 		AssetLoader.fit(assetModel, TOWER_SIZE)
-		for _, d in assetModel:GetDescendants() do
-			if d:IsA("BasePart") then
-				d.Anchored = true
-				d.CanCollide = false
-				d.CanTouch = false
-			end
-		end
+		AssetLoader.anchor(assetModel)
 		AssetLoader.place(assetModel, wp)
 		assetModel.Parent = folder
 
-		local okBox, bbox = pcall(assetModel.GetBoundingBox, assetModel)
-		return assetModel, (okBox and bbox.Position or (wp + Vector3.new(0, 2, 0)))
+		local pos = wp + Vector3.new(0, 2, 0)
+		if assetModel:IsA("PVInstance") then
+			local okPivot, pivot = pcall(function()
+				return (assetModel :: any):GetPivot()
+			end)
+			if okPivot and typeof(pivot) == "CFrame" then
+				pos = pivot.Position
+			end
+		end
+		return assetModel, pos
 	end
 
 	local part = Instance.new("Part")

@@ -29,12 +29,22 @@ fi
 
 echo
 echo "=============================================="
-echo " 3/13  모듈 구조 검증 (Rojo init 규칙)"
+echo " 3/14  모듈 구조 검증 (Rojo init 규칙)"
 echo "=============================================="
 if $LUNE run tests/structure.test.luau . > /tmp/structure.log 2>&1; then
 	grep -E "=====" /tmp/structure.log | sed 's/^/PASS  /'
 else
 	echo "FAIL  모듈 구조"; grep -A5 "FAIL" /tmp/structure.log | head -20; FAIL=1
+fi
+
+echo
+echo "=============================================="
+echo " 4/14  에셋 클래스 검증 (Model 아닌 에셋)"
+echo "=============================================="
+if $LUNE run tests/assetclass.test.luau assets_clean > /tmp/assetclass.log 2>&1; then
+	grep -E "=====" /tmp/assetclass.log | sed 's/^/PASS  /'
+else
+	echo "FAIL  에셋 클래스"; grep -A30 "문제 목록" /tmp/assetclass.log | head -30; FAIL=1
 fi
 
 echo

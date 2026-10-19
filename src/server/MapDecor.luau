@@ -57,16 +57,10 @@ function MapDecor.rocks(parent: Instance, theme: any, bounds: { x: number, z: nu
 
 		-- 마켓플레이스 바위 에셋 우선, 실패 시 파트
 		local asset = AssetLoader.template("env_rock")
-		if asset and asset:IsA("Model") then
+		if asset then
 			AssetLoader.fit(asset, Vector3.new(size, size, size))
-			for _, d in asset:GetDescendants() do
-				if d:IsA("BasePart") then
-					d.Anchored = true
-					d.CanCollide = false
-					d.CanTouch = false
-				end
-			end
-			asset:PivotTo(CFrame.new(x, size * 0.35, z) * CFrame.Angles(0, rnd() * math.pi * 2, 0))
+			AssetLoader.anchor(asset)
+			AssetLoader.pivot(asset, CFrame.new(x, size * 0.35, z) * CFrame.Angles(0, rnd() * math.pi * 2, 0))
 			asset.Parent = parent
 			continue
 		end
@@ -136,16 +130,10 @@ function MapDecor.props(parent: Instance, theme: any, bounds: { x: number, z: nu
 		-- 지역에 따라 나무/수정 에셋 선택
 		local assetKey = (rnd() > 0.45) and "env_tree" or "env_crystal"
 		local asset = AssetLoader.template(assetKey)
-		if asset and asset:IsA("Model") then
+		if asset then
 			AssetLoader.fit(asset, Vector3.new(size, size * 1.6, size))
-			for _, d in asset:GetDescendants() do
-				if d:IsA("BasePart") then
-					d.Anchored = true
-					d.CanCollide = false
-					d.CanTouch = false
-				end
-			end
-			asset:PivotTo(CFrame.new(x, 0, z) * CFrame.Angles(0, rnd() * math.pi * 2, 0))
+			AssetLoader.anchor(asset)
+			AssetLoader.pivot(asset, CFrame.new(x, 0, z) * CFrame.Angles(0, rnd() * math.pi * 2, 0))
 			asset.Parent = parent
 			continue
 		end

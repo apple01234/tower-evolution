@@ -38,17 +38,11 @@ local function buildBossVisual(boss: any)
 
 	-- 마켓플레이스 드래곤 에셋 우선
 	local asset = AssetLoader.template("boss_dragon")
-	if asset and asset:IsA("Model") then
+	if asset then
 		AssetLoader.fit(asset, Vector3.new(12, 12, 12))
-		for _, d in asset:GetDescendants() do
-			if d:IsA("BasePart") then
-				d.Anchored = true
-				d.CanCollide = false
-				d.CanTouch = false
-			end
-		end
+		AssetLoader.anchor(asset)
 		asset.Name = "CoopBoss"
-		asset:PivotTo(baseCF)
+		AssetLoader.pivot(asset, baseCF)
 		asset.Parent = a
 		bossModel = asset
 		_ = boss

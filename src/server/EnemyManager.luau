@@ -36,16 +36,10 @@ local function buildEnemyModel(isBoss: boolean, wave: number): Instance
 	if not assetModel and assetKey ~= "enemy" then
 		assetModel = AssetLoader.template("enemy")
 	end
-	if assetModel and assetModel:IsA("Model") then
+	if assetModel then
 		assetModel.Name = isBoss and "Boss" or "Enemy"
 		AssetLoader.fit(assetModel, isBoss and Vector3.new(7, 7, 7) or Vector3.new(3, 3, 3))
-		for _, d in assetModel:GetDescendants() do
-			if d:IsA("BasePart") then
-				d.Anchored = true
-				d.CanCollide = false
-				d.CanTouch = false
-			end
-		end
+		AssetLoader.anchor(assetModel)
 		return assetModel
 	end
 

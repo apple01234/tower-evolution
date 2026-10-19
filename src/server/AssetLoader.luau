@@ -93,38 +93,92 @@ function AssetLoader.template(key: string): Instance?
 	return base:Clone()
 end
 
--- 모델을 목표 크기에 맞춰 스케일. GetBoundingBox 는 Tuple 반환.
-function AssetLoader.fit(model: Instance, targetSize: Vector3): boolean
-	if not model:IsA("Model") then
-		return false
+-- 에셋이 Model 이 아닐 수 있다 (UnionOperation, Part, Accessory, Folder 등).
+-- 마켓플레이스 모델은 최상위 클래스가 제각각이므로 Model 전제를 버린다.
+local function bboxOf(inst: Instance): (CFrame?, Vector3?)
+	if inst:IsA("Model") then
+		local ok, cf, size = pcall((inst :: Model).GetBoundingBox, inst)
+		if ok and typeof(cf) == "CFrame" and typeof(size) == "Vector3" then
+			return cf, size
+		end
+	elseif inst:IsA("BasePart") then
+		local p = inst :: BasePart
+		return p.CFrame, p.Size
 	end
-	local okBox, _, size = pcall(model.GetBoundingBox, model)
-	if not okBox or typeof(size) ~= "Vector3" then
+	-- PVInstance 가 아니면 자식에서 크기를 유추
+	if inst:IsA("PVInstance") then
+		local ok, cf, size = pcall((inst :: any).GetBoundingBox, inst)
+		if ok and typeof(cf) == "CFrame" and typeof(size) == "Vector3" then
+			return cf, size
+		end
+	end
+	return nil, nil
+end
+
+-- 목표 크기에 맞춰 스케일. Model 이면 ScaleTo, Part 면 Size 를 직접 조정.
+function AssetLoader.fit(inst: Instance, targetSize: Vector3): boolean
+	local _, size = bboxOf(inst)
+	if not size then
 		return false
 	end
 	if size.X <= 0 or size.Y <= 0 or size.Z <= 0 then
 		return false
 	end
+
 	local scale = math.min(targetSize.X / size.X, targetSize.Y / size.Y, targetSize.Z / size.Z)
 	if scale <= 0 or scale == math.huge or scale ~= scale then
 		return false
 	end
-	return pcall(model.ScaleTo, model, scale)
+
+	if inst:IsA("Model") then
+		return pcall((inst :: Model).ScaleTo, inst, scale)
+	end
+	if inst:IsA("BasePart") then
+		local p = inst :: BasePart
+		p.Size = p.Size * scale
+		return true
+	end
+	return false
 end
 
 -- 바닥 기준으로 배치
-function AssetLoader.place(model: Instance, at: Vector3): boolean
-	if not model:IsA("Model") then
-		return false
-	end
-	local okBox, bbox, size = pcall(model.GetBoundingBox, model)
-	if not okBox or typeof(bbox) ~= "CFrame" or typeof(size) ~= "Vector3" then
+function AssetLoader.place(inst: Instance, at: Vector3): boolean
+	local _, size = bboxOf(inst)
+	if not size then
 		return false
 	end
 	local offset = Vector3.new(0, size.Y / 2, 0)
-	return pcall(function()
-		model:PivotTo(CFrame.new(at + offset))
-	end)
+	return AssetLoader.pivot(inst, CFrame.new(at + offset))
+end
+
+-- Model 이든 Part 든 이동. PivotTo 는 PVInstance 에 있으므로 둘 다 지원.
+function AssetLoader.pivot(inst: Instance, cf: CFrame): boolean
+	if inst:IsA("PVInstance") then
+		return pcall(function()
+			(inst :: any):PivotTo(cf)
+		end)
+	end
+	return false
+end
+
+-- 떠다니지 않도록 고정. Model/Part/Accessory/Folder 모두 처리.
+function AssetLoader.anchor(inst: Instance): number
+	local n = 0
+	local function fix(p: BasePart)
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanTouch = false
+		n += 1
+	end
+	if inst:IsA("BasePart") then
+		fix(inst :: BasePart)
+	end
+	for _, d in inst:GetDescendants() do
+		if d:IsA("BasePart") then
+			fix(d)
+		end
+	end
+	return n
 end
 
 -- 구워진 에셋 개수 (Studio 즉시 확인용)
