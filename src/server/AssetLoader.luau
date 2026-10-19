@@ -15,20 +15,11 @@ local InsertService = game:GetService("InsertService")
 
 local AssetLoader = {}
 
--- 카탈로그: TowerData / Lore 키와 1:1 대응
--- 전부 AssetTypeId=10 (Model), 무료 공개 모델.
-AssetLoader.CATALOG = {
-	-- 타워 4단계
-	ApprenticeTurret = { id = 12380482817, label = "Machine Gun Turret" },
-	CrystalTurret = { id = 5131549882, label = "Crystal Tower" },
-	ArcaneArtillery = { id = 12381351019, label = "Rocket Turret" },
-	AstralSovereign = { id = 12381074964, label = "Heavy Machine Gun Turret" },
-	-- 적
-	enemy = { id = 15001916987, label = "Monster Noob" },
-	enemy_alt = { id = 16611095319, label = "monster" },
-	-- 환경
-	env_tower = { id = 277678404, label = "City Tower Building" },
-}
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local AssetCatalog = require(Shared:WaitForChild("AssetCatalog"))
+
+-- 카탈로그: AssetCatalog.luau (검증된 무료 모델만)
+AssetLoader.CATALOG = AssetCatalog.CATALOG
 
 local cache: { [number]: Instance } = {}
 local failed: { [number]: boolean } = {}
