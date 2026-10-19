@@ -16,6 +16,7 @@ local CoopBossServer = {}
 
 local current: any = nil -- CoopBoss.Boss
 local bossPart: Part? = nil
+local bossModel: Instance? = nil
 
 local function arena(): Instance?
 	return workspace:FindFirstChild("TowerArena")
@@ -24,6 +25,33 @@ end
 local function buildBossVisual(boss: any)
 	local a = arena()
 	if not a then
+		return
+	end
+
+	local baseCF: CFrame
+	local basePart = a:FindFirstChild("BaseMark")
+	if basePart and basePart:IsA("BasePart") then
+		baseCF = basePart.CFrame + Vector3.new(0, 12, 12)
+	else
+		baseCF = CFrame.new(0, 12, 12)
+	end
+
+	-- 마켓플레이스 드래곤 에셋 우선
+	local asset = AssetLoader.template("boss_dragon")
+	if asset and asset:IsA("Model") then
+		AssetLoader.fit(asset, Vector3.new(12, 12, 12))
+		for _, d in asset:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Anchored = true
+				d.CanCollide = false
+				d.CanTouch = false
+			end
+		end
+		asset.Name = "CoopBoss"
+		asset:PivotTo(baseCF)
+		asset.Parent = a
+		bossModel = asset
+		_ = boss
 		return
 	end
 
@@ -36,24 +64,19 @@ local function buildBossVisual(boss: any)
 	child.Material = Enum.Material.Neon
 	child.Color = Color3.fromRGB(220, 40, 60)
 
-	-- 기지 근처에 배치
-	local pts = {}
-	local arenaFolder = a
-	local basePart = arenaFolder:FindFirstChild("BaseMark")
-	if basePart and basePart:IsA("BasePart") then
-		child.CFrame = basePart.CFrame + Vector3.new(0, 14, 12)
-	else
-		child.CFrame = CFrame.new(0, 14, 12)
-	end
-	child.Parent = arenaFolder
+	child.CFrame = baseCF
+	child.Parent = a
 	bossPart = child
-	_ = pts
 end
 
 local function clearVisual()
 	if bossPart then
 		bossPart:Destroy()
 		bossPart = nil
+	end
+	if bossModel then
+		bossModel:Destroy()
+		bossModel = nil
 	end
 end
 

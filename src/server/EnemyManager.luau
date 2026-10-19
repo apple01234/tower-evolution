@@ -18,11 +18,27 @@ local EnemyManager = {}
 local nextEnemyId = 1
 
 -- 적 모델 생성 (에셋 실패 시 파트 폴백). 모델과 위치는 호출자가 parent 지정.
-local function buildEnemyModel(isBoss: boolean): Instance
-	local assetModel = AssetLoader.template(isBoss and "enemy_alt" or "enemy")
+-- 적 종류 선택: 보스는 드래곤, 일반은 슬라임(웨이브에 따라 변형)
+local function pickAssetKey(isBoss: boolean, wave: number): string
+	if isBoss then
+		return (wave % 2 == 0) and "boss_dragon" or "boss_dragon_alt"
+	end
+	if wave % 3 == 0 then
+		return "enemy_fast"
+	end
+	return "enemy"
+end
+
+local function buildEnemyModel(isBoss: boolean, wave: number): Instance
+	local assetKey = pickAssetKey(isBoss, wave)
+	local assetModel = AssetLoader.template(assetKey)
+	-- 실패 시 대체 에셋 시도
+	if not assetModel and assetKey ~= "enemy" then
+		assetModel = AssetLoader.template("enemy")
+	end
 	if assetModel and assetModel:IsA("Model") then
 		assetModel.Name = isBoss and "Boss" or "Enemy"
-		AssetLoader.fit(assetModel, isBoss and Vector3.new(6, 6, 6) or Vector3.new(3, 3, 3))
+		AssetLoader.fit(assetModel, isBoss and Vector3.new(7, 7, 7) or Vector3.new(3, 3, 3))
 		for _, d in assetModel:GetDescendants() do
 			if d:IsA("BasePart") then
 				d.Anchored = true
@@ -70,7 +86,7 @@ function EnemyManager.spawn(wave: number, isBoss: boolean, zone: any): any?
 	end
 
 	local hp, speed = statsFor(wave, isBoss, zone)
-	local model = buildEnemyModel(isBoss)
+	local model = buildEnemyModel(isBoss, wave)
 	model.Parent = folder
 
 	local id = nextEnemyId

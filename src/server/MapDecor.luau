@@ -5,6 +5,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MapThemes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("MapThemes"))
 
+local AssetLoader = require(script.Parent:WaitForChild("AssetLoader"))
+
 local MapDecor = {}
 
 -- 시드 고정 난수 (같은 맵이 항상 같은 모양이 되도록)
@@ -52,6 +54,23 @@ function MapDecor.rocks(parent: Instance, theme: any, bounds: { x: number, z: nu
 		end
 
 		local size = 1.5 + rnd() * 2.5
+
+		-- 마켓플레이스 바위 에셋 우선, 실패 시 파트
+		local asset = AssetLoader.template("env_rock")
+		if asset and asset:IsA("Model") then
+			AssetLoader.fit(asset, Vector3.new(size, size, size))
+			for _, d in asset:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.Anchored = true
+					d.CanCollide = false
+					d.CanTouch = false
+				end
+			end
+			asset:PivotTo(CFrame.new(x, size * 0.35, z) * CFrame.Angles(0, rnd() * math.pi * 2, 0))
+			asset.Parent = parent
+			continue
+		end
+
 		local rock = Instance.new("Part")
 		rock.Name = "Rock"
 		rock.Anchored = true
@@ -112,7 +131,25 @@ function MapDecor.props(parent: Instance, theme: any, bounds: { x: number, z: nu
 			continue
 		end
 
-		local size = 0.8 + rnd() * 1.4
+		local size = 2.0 + rnd() * 2.5
+
+		-- 지역에 따라 나무/수정 에셋 선택
+		local assetKey = (rnd() > 0.45) and "env_tree" or "env_crystal"
+		local asset = AssetLoader.template(assetKey)
+		if asset and asset:IsA("Model") then
+			AssetLoader.fit(asset, Vector3.new(size, size * 1.6, size))
+			for _, d in asset:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.Anchored = true
+					d.CanCollide = false
+					d.CanTouch = false
+				end
+			end
+			asset:PivotTo(CFrame.new(x, 0, z) * CFrame.Angles(0, rnd() * math.pi * 2, 0))
+			asset.Parent = parent
+			continue
+		end
+
 		local prop = Instance.new("Part")
 		prop.Name = "Prop"
 		prop.Anchored = true
