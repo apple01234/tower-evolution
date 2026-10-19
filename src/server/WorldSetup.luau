@@ -99,12 +99,16 @@ local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, m
 end
 
 -- 맵 생성. zoneId 로 테마를 고른다.
+-- Workspace 에 이미 TowerArena 가 구워져 있으면(빌드 타임 배치) 그것을 재사용한다.
+-- 없을 때만 런타임에 만든다.
 function WorldSetup.build(zoneId: string?)
 	local theme = MapThemes.get(zoneId or "Midgard_Forest")
 
 	local existing = workspace:FindFirstChild("TowerArena")
 	if existing then
-		existing:Destroy()
+		-- 사전 배치된 맵: 앰비언스만 테마에 맞춰 적용하고 유지한다.
+		applyAmbience(theme)
+		return existing
 	end
 
 	local arena = Instance.new("Folder")

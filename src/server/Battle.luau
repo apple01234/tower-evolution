@@ -106,6 +106,16 @@ function Battle.init()
 	events.RequestZone.OnServerEvent:Connect(Growth.zone)
 	events.RequestClaimMission.OnServerEvent:Connect(Growth.claimMission)
 
+	-- 클라이언트가 UI 준비를 마치면 전체 상태를 다시 보낸다.
+	-- (PlayerAdded 시점의 1회성 전송은 클라가 아직 안 붙었을 수 있어 유실된다)
+	events.RequestState.OnServerEvent:Connect(function(player)
+		if not allow(player, "STATE") then
+			return
+		end
+		Battle.syncPlayer(player)
+		Waves.broadcast()
+	end)
+
 	-- 퇴장 정리
 	Players.PlayerRemoving:Connect(function(player)
 		local cells = State.placed[player.UserId]

@@ -54,6 +54,7 @@ Config.RATE = {
 	FUSE = 6,
 	PLACE = 10,
 	UPGRADE = 10,
+	STATE = 3, -- 상태 재요청 (UI 재구성/재접속 대비)
 }
 
 -- 데이터 저장

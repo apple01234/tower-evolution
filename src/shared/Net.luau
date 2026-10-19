@@ -16,6 +16,7 @@ local EVENTS = {
 	"RequestResearch", -- (key: string) 연구 구매
 	"RequestZone", -- (zoneId: string) 지역 이동
 	"RequestClaimMission", -- (key: string) 미션 보상 수령
+	"RequestState", -- () 전체 상태 재전송 요청 (클라 UI 준비 완료 시)
 
 	"StateSync", -- (state) 서버 -> 클라이언트
 	"WaveSync", -- (wave, isBoss, bossHp, bossMaxHp)

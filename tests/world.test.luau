@@ -49,6 +49,12 @@ check(
 	"part() 가 collide 인자를 받지 않음 — 바닥 충돌을 켤 수단이 없다"
 )
 
+-- 3-1) 사전 배치된 TowerArena 를 파괴하지 않아야 한다
+check(
+	string.find(src, "existing:Destroy()", 1, true) == nil,
+	"WorldSetup.build 가 기존 TowerArena 를 Destroy 함 — 사전 배치 맵이 사라진다"
+)
+
 -- 4) part() 본문이 CanCollide 를 하드코딩 false 로 두지 않아야 한다
 local badHardcode = string.find(src, "p.CanCollide = false", 1, true) ~= nil
 check(not badHardcode, "part() 가 CanCollide=false 를 하드코딩 — 바닥도 충돌 없음이 된다")

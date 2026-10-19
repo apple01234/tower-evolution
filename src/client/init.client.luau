@@ -218,6 +218,13 @@ if READY then
 
 	bindEvents()
 
+	-- UI 배선이 끝난 뒤 서버에 상태를 요청한다.
+	-- 서버의 PlayerAdded 시점 전송은 클라이언트가 아직 준비 전이라 유실된다.
+	local reqEv = Net.get("RequestState")
+	if reqEv then
+		reqEv:FireServer()
+	end
+
 	-- ============ 초기 안내 ============
 	if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
 		UI.showNotify("타워를 탭해 선택한 뒤 합성하세요.", "info")

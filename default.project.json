@@ -2,6 +2,10 @@
   "name": "tower-evolution",
   "tree": {
     "$className": "DataModel",
+    "Workspace": {
+      "$className": "Workspace",
+      "$path": "workspace_baked"
+    },
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
       "Shared": { "$path": "src/shared" },
