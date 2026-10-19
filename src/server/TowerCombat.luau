@@ -9,6 +9,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Missions = require(Shared:WaitForChild("Missions"))
 local Progress = require(Shared:WaitForChild("Progress"))
 local TowerData = require(Shared:WaitForChild("TowerData"))
+local Anim = require(Shared:WaitForChild("Anim"))
 
 local EnemyManager = require(script.Parent:WaitForChild("EnemyManager"))
 local Save = require(script.Parent:WaitForChild("Save"))
@@ -99,7 +100,12 @@ local function fireTower(player: Player, tower: any): boolean
 	local killed = Combat.applyHits(State.enemies, hits, slowOf(def))
 	for _, k in killed do
 		grantKill(player, k)
-		EnemyManager.remove(k.id)
+		EnemyManager.removeAnimated(k.id)
+	end
+
+	-- 발사 반동 연출
+	if tower.model then
+		Anim.towerFire(tower.model)
 	end
 
 	tower.cooldown = 1 / math.max(0.05, def.attackSpeed)

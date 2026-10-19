@@ -77,8 +77,8 @@ function Battle.init()
 	Handlers.inject({ allow = allow, notifyMission = notifyMission })
 	Growth.inject({ allow = allow })
 
-	-- 월드 생성
-	WorldSetup.build()
+	-- 월드 생성 (첫 지역 테마)
+	WorldSetup.build("Midgard_Forest")
 	local arena = workspace:FindFirstChild("TowerArena")
 	if not arena then
 		warn("[Battle] TowerArena 생성 실패")

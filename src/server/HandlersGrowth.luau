@@ -10,6 +10,7 @@ local Missions = require(Shared:WaitForChild("Missions"))
 local Progress = require(Shared:WaitForChild("Progress"))
 
 local EnemyManager = require(script.Parent:WaitForChild("EnemyManager"))
+local WorldSetup = require(script.Parent:WaitForChild("WorldSetup"))
 local Save = require(script.Parent:WaitForChild("Save"))
 local State = require(script.Parent:WaitForChild("BattleState"))
 
@@ -151,6 +152,23 @@ function Growth.zone(player: Player, zoneId: any)
 	if not Progress.isZoneUnlocked(ps, target.id, target.unlockWave) then
 		notify(player, string.format("%s은(는) 웨이브 %d에서 해금됩니다.", target.kingdom, target.unlockWave), "bad")
 		return
+	end
+
+	-- 실제로 맵을 재생성한다 (지역 테마 적용)
+	WorldSetup.build(target.id)
+	EnemyManager.clearAll()
+	State.wave = 0
+	State.baseHp = State.baseMaxHp
+	State.bossDefeatedThisRun = false
+
+	-- 배치된 타워는 맵과 함께 사라지므로 초기화 (인벤토리로는 돌려주지 않음 — 이동 비용)
+	for userId, cells in State.placed do
+		for _, t in cells do
+			if t.model then
+				t.model:Destroy()
+			end
+		end
+		State.placed[userId] = {}
 	end
 
 	notify(player, target.kingdom .. " · " .. target.name .. "으로 이동", "good")

@@ -1,23 +1,28 @@
 --!strict
--- 맵/경로 생성. 그리드 좌표를 월드 좌표로 환산한다.
-local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
+-- 맵/경로 생성. 그리드 좌표를 월드 좌표로 환산하고, 지역 테마에 맞춰 맵을 만든다.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local MapThemes = require(Shared:WaitForChild("MapThemes"))
+
+local MapDecor = require(script.Parent:WaitForChild("MapDecor"))
 
 local WorldSetup = {}
 
 WorldSetup.ORIGIN = Vector3.new(0, 0, 0)
 
--- 경로 길이는 불변이므로 최초 1회만 계산해 캐시한다.
--- (Heartbeat마다 7개 세그먼트를 재계산하던 비용 제거)
+-- 경로 길이는 불변 → 최초 1회 캐시
 local _pathLenCache: number? = nil
 
--- 그리드(col,row) -> 월드 Vector3 (셀 중심)
+-- 그리드(col,row) -> 월드 Vector3
 function WorldSetup.cellToWorld(col: number, row: number): Vector3
 	local x = (col - (Config.GRID_COLS - 1) / 2) * Config.CELL_SIZE
 	local z = (row - (Config.GRID_ROWS - 1) / 2) * Config.CELL_SIZE
 	return WorldSetup.ORIGIN + Vector3.new(x, 0, z)
 end
 
--- 경로를 월드 좌표 배열로
 function WorldSetup.pathPoints(): { Vector3 }
 	local pts = {}
 	for _, p in Config.PATH do
@@ -26,7 +31,6 @@ function WorldSetup.pathPoints(): { Vector3 }
 	return pts
 end
 
--- 경로 총 길이 (스폰 위치 계산용) — 불변이므로 캐시
 function WorldSetup.pathLength(): number
 	if _pathLenCache then
 		return _pathLenCache
@@ -47,8 +51,8 @@ function WorldSetup.pointAt(t: number): Vector3
 		return WorldSetup.ORIGIN
 	end
 	local clamped = math.clamp(t, 0, 1)
-	local total = 0
 	local segLens = {}
+	local total = 0
 	for i = 2, #pts do
 		local d = (pts[i] - pts[i - 1]).Magnitude
 		table.insert(segLens, d)
@@ -69,7 +73,34 @@ function WorldSetup.pointAt(t: number): Vector3
 	return pts[#pts]
 end
 
-function WorldSetup.build()
+-- 조명/안개를 테마에 맞춤
+local function applyAmbience(theme: any)
+	local amb = MapThemes.toColor3(theme.ambient)
+	local fog = MapThemes.toColor3(theme.fogColor)
+	Lighting.Ambient = amb
+	Lighting.OutdoorAmbient = amb
+	Lighting.FogColor = fog
+	Lighting.FogEnd = theme.fogEnd
+	Lighting.ColorShift_Top = fog
+end
+
+local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, mat: Enum.Material, color: Color3): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Anchored = true
+	p.CanCollide = false
+	p.Size = size
+	p.CFrame = cf
+	p.Material = mat
+	p.Color = color
+	p.Parent = parent
+	return p
+end
+
+-- 맵 생성. zoneId 로 테마를 고른다.
+function WorldSetup.build(zoneId: string?)
+	local theme = MapThemes.get(zoneId or "Midgard_Forest")
+
 	local existing = workspace:FindFirstChild("TowerArena")
 	if existing then
 		existing:Destroy()
@@ -79,56 +110,64 @@ function WorldSetup.build()
 	arena.Name = "TowerArena"
 	arena.Parent = workspace
 
-	-- 바닥
-	local ground = Instance.new("Part")
-	ground.Name = "Ground"
-	ground.Anchored = true
-	ground.Size = Vector3.new(
-		Config.GRID_COLS * Config.CELL_SIZE + 20,
-		2,
-		Config.GRID_ROWS * Config.CELL_SIZE + 20
-	)
-	ground.Position = WorldSetup.ORIGIN - Vector3.new(0, 1, 0)
-	ground.Material = Enum.Material.Grass
-	ground.Color = Color3.fromRGB(46, 82, 40)
-	ground.TopSurface = Enum.SurfaceType.Smooth
-	ground.Parent = arena
+	local bounds = {
+		x = Config.GRID_COLS * Config.CELL_SIZE + 24,
+		z = Config.GRID_ROWS * Config.CELL_SIZE + 24,
+	}
 
-	-- 경로 표시
+	-- 바닥
+	local ground = part(
+		arena,
+		"Ground",
+		Vector3.new(bounds.x, 2, bounds.z),
+		CFrame.new(WorldSetup.ORIGIN - Vector3.new(0, 1, 0)),
+		MapThemes.toMaterial(theme.groundMaterial),
+		MapThemes.toColor3(theme.groundColor)
+	)
+	ground.TopSurface = Enum.SurfaceType.Smooth
+
+	-- 경로
 	local pts = WorldSetup.pathPoints()
 	for i = 2, #pts do
 		local a, b = pts[i - 1], pts[i]
-		local seg = Instance.new("Part")
-		seg.Name = "Path"
-		seg.Anchored = true
-		seg.CanCollide = false
-		seg.Size = Vector3.new(Config.CELL_SIZE * 0.9, 0.4, (b - a).Magnitude)
-		seg.CFrame = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.rad(90), 0)
-		seg.Material = Enum.Material.Slate
-		seg.Color = Color3.fromRGB(120, 105, 80)
-		seg.Parent = arena
+		part(
+			arena,
+			"Path",
+			Vector3.new(Config.CELL_SIZE * 0.9, 0.4, (b - a).Magnitude),
+			CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.rad(90), 0),
+			MapThemes.toMaterial(theme.pathMaterial),
+			MapThemes.toColor3(theme.pathColor)
+		)
 	end
 
-	-- 스폰/종착 지점 표식
-	local spawnMark = Instance.new("Part")
-	spawnMark.Name = "SpawnMark"
-	spawnMark.Anchored = true
-	spawnMark.CanCollide = false
-	spawnMark.Size = Vector3.new(4, 0.5, 4)
-	spawnMark.Position = pts[1]
-	spawnMark.Material = Enum.Material.Neon
-	spawnMark.Color = Color3.fromRGB(200, 60, 60)
-	spawnMark.Parent = arena
+	-- 스폰 / 기지 표식
+	part(arena, "SpawnMark", Vector3.new(4, 0.5, 4),
+		CFrame.new(pts[1] + Vector3.new(0, 0.3, 0)), Enum.Material.Neon, MapThemes.toColor3(theme.spawnColor))
 
-	local baseMark = Instance.new("Part")
-	baseMark.Name = "BaseMark"
-	baseMark.Anchored = true
-	baseMark.CanCollide = false
-	baseMark.Size = Vector3.new(6, 1, 6)
-	baseMark.Position = pts[#pts]
-	baseMark.Material = Enum.Material.Neon
-	baseMark.Color = Color3.fromRGB(80, 180, 255)
-	baseMark.Parent = arena
+	part(arena, "BaseMark", Vector3.new(6, 1, 6),
+		CFrame.new(pts[#pts] + Vector3.new(0, 0.5, 0)), Enum.Material.Neon, MapThemes.toColor3(theme.baseColor))
+
+	-- 기지 코어 (상징물)
+	local core = Instance.new("Part")
+	core.Name = "BaseCore"
+	core.Shape = Enum.PartType.Ball
+	core.Anchored = true
+	core.CanCollide = false
+	core.Size = Vector3.new(5, 5, 5)
+	core.CFrame = CFrame.new(pts[#pts] + Vector3.new(0, 4, 0))
+	core.Material = Enum.Material.Neon
+	core.Color = MapThemes.toColor3(theme.baseColor)
+	core.Parent = arena
+
+	-- 장식 (테마별 밀도, 시드로 항상 같은 배치)
+	local seed = 0
+	local zid = theme.zoneId
+	for i = 1, #zid do
+		seed += string.byte(zid, i) * i
+	end
+	MapDecor.build(arena, theme, bounds, pts, seed)
+
+	applyAmbience(theme)
 
 	return arena
 end

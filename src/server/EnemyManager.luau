@@ -7,6 +7,8 @@ local Config = require(Shared:WaitForChild("Config"))
 local Combat = require(Shared:WaitForChild("Combat"))
 local Lore = require(Shared:WaitForChild("Lore"))
 
+local Anim = require(Shared:WaitForChild("Anim"))
+
 local AssetLoader = require(script.Parent:WaitForChild("AssetLoader"))
 local State = require(script.Parent:WaitForChild("BattleState"))
 local WorldSetup = require(script.Parent:WaitForChild("WorldSetup"))
@@ -86,9 +88,11 @@ function EnemyManager.spawn(wave: number, isBoss: boolean, zone: any): any?
 		model = model,
 	}
 	State.enemies[id] = e
+	Anim.enemySpawn(model)
 	return e
 end
 
+-- 즉시 제거 (정리용)
 function EnemyManager.remove(id: number)
 	local e = State.enemies[id]
 	if e then
@@ -96,6 +100,18 @@ function EnemyManager.remove(id: number)
 			e.model:Destroy()
 		end
 		State.enemies[id] = nil
+	end
+end
+
+-- 사망 연출 후 제거 (전투 중 처치용)
+function EnemyManager.removeAnimated(id: number)
+	local e = State.enemies[id]
+	if not e then
+		return
+	end
+	State.enemies[id] = nil -- 보상 중복 방지: 먼저 목록에서 분리
+	if e.model then
+		Anim.enemyDeath(e.model)
 	end
 end
 
