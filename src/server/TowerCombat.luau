@@ -11,6 +11,7 @@ local Progress = require(Shared:WaitForChild("Progress"))
 local TowerData = require(Shared:WaitForChild("TowerData"))
 local Anim = require(Shared:WaitForChild("Anim"))
 
+local CoopBossServer = require(script.Parent:WaitForChild("CoopBossServer"))
 local EnemyManager = require(script.Parent:WaitForChild("EnemyManager"))
 local Save = require(script.Parent:WaitForChild("Save"))
 local State = require(script.Parent:WaitForChild("BattleState"))
@@ -80,7 +81,16 @@ local function fireTower(player: Player, tower: any): boolean
 	end
 
 	local list = EnemyManager.aliveList()
+
+	-- 적이 없어도 협동 보스가 있으면 보스를 타격한다
 	if #list == 0 then
+		if CoopBossServer.isActive() then
+			local ps2 = Save.ensureProgress(player)
+			local dmg = def.damage * Progress.damageMultiplier(ps2)
+			CoopBossServer.damage(player, dmg)
+			tower.cooldown = 1 / math.max(0.05, def.attackSpeed)
+			return false
+		end
 		return false
 	end
 

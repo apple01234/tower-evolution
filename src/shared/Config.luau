@@ -29,6 +29,12 @@ Config.ENEMY_SPEED = 8
 Config.BOSS_HP_MULT = 8
 Config.BOSS_SPEED_MULT = 0.6
 
+-- 협동 보스 (여러 플레이어가 HP 공유)
+Config.COOP_BOSS_HP_MULT = 6 -- 일반 보스 대비 배율 (참가자 수 고려)
+Config.COOP_BOSS_REWARD_PER_HP = 0.5 -- HP 1당 보상 골드
+Config.COOP_BOSS_TIMEOUT = 180 -- 초과 시 퇴장
+Config.COOP_BOSS_INTERVAL = 45 -- 자동 등장 간격(초)
+
 -- 적 경로 (그리드 좌표를 월드 좌표로 변환해 사용)
 -- 값은 (col, row) 그리드 좌표. 서버가 월드 좌표로 환산한다.
 Config.PATH = {

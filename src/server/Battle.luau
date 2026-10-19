@@ -6,9 +6,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local Lore = require(Shared:WaitForChild("Lore"))
 local Missions = require(Shared:WaitForChild("Missions"))
 local Net = require(Shared:WaitForChild("Net"))
 
+local CoopBossServer = require(script.Parent:WaitForChild("CoopBossServer"))
 local EnemyManager = require(script.Parent:WaitForChild("EnemyManager"))
 local Growth = require(script.Parent:WaitForChild("HandlersGrowth"))
 local Handlers = require(script.Parent:WaitForChild("HandlersInventory"))
@@ -121,8 +123,22 @@ function Battle.init()
 	-- 웨이브 루프
 	task.spawn(Waves.run)
 
+	-- 협동 보스 자동 등장 루프
+	task.spawn(function()
+		while true do
+			task.wait(Config.COOP_BOSS_INTERVAL)
+			CoopBossServer.tick()
+			if not CoopBossServer.isActive() then
+				-- 지역의 보스를 순환 등장
+				local zone = Lore.zoneForWave(State.wave)
+				CoopBossServer.start(zone.bossKey)
+			end
+		end
+	end)
+
 	-- 프레임 루프
 	RunService.Heartbeat:Connect(function(dt)
+		CoopBossServer.tick()
 		local anyHit = EnemyManager.update(dt, Waves.onBaseHit)
 		if anyHit then
 			Waves.broadcast()

@@ -12,6 +12,7 @@ local Hud = require(script.Parent:WaitForChild("Hud"))
 local InventoryPanel = require(script.Parent:WaitForChild("InventoryPanel"))
 local GrowthPanel = require(script.Parent:WaitForChild("GrowthPanel"))
 local BranchDialog = require(script.Parent:WaitForChild("BranchDialog"))
+local CoopHud = require(script.Parent:WaitForChild("CoopHud"))
 local MissionPanel = require(script.Parent:WaitForChild("MissionPanel"))
 
 local mk = UI.mk
@@ -47,6 +48,7 @@ UI.attachNotify(notifyLabel)
 
 -- ============ HUD ============
 Hud.build(gui)
+CoopHud.build(gui)
 
 -- ============ 인벤토리 ============
 InventoryPanel.build(gui, {
@@ -151,6 +153,13 @@ local function bindEvents()
 			if type(payload) == "table" then
 				MissionPanel.setData(payload)
 			end
+		end)
+	end
+
+	local coopEv = Net.get("CoopSync")
+	if coopEv then
+		coopEv.OnClientEvent:Connect(function(payload)
+			CoopHud.update(payload)
 		end)
 	end
 

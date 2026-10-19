@@ -21,6 +21,7 @@ local EVENTS = {
 	"WaveSync", -- (wave, isBoss, bossHp, bossMaxHp)
 	"ProgressSync", -- (progress) 서버 -> 클라이언트
 	"MissionSync", -- (missions) 서버 -> 클라이언트
+	"CoopSync", -- (boss|null) 협동 보스 상태
 	"Notify", -- (msg, kind)
 }
 
