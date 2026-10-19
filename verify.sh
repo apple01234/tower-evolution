@@ -39,12 +39,22 @@ fi
 
 echo
 echo "=============================================="
-echo " 4/4  세계관 데이터 테스트"
+echo " 4/5  세계관 데이터 테스트"
 echo "=============================================="
 if $LUNE run tests/lore.test.luau > /tmp/lore.log 2>&1; then
 	grep -E "=====" /tmp/lore.log | sed 's/^/PASS  /'
 else
 	echo "FAIL  세계관 테스트"; grep -B1 -A1 "FAIL" /tmp/lore.log | head -40; FAIL=1
+fi
+
+echo
+echo "=============================================="
+echo " 5/5  성장 시스템 테스트 (환생/연구/도감/지역)"
+echo "=============================================="
+if $LUNE run tests/progress.test.luau > /tmp/progress.log 2>&1; then
+	grep -E "=====" /tmp/progress.log | sed 's/^/PASS  /'
+else
+	echo "FAIL  성장 시스템 테스트"; grep -B1 -A1 "FAIL" /tmp/progress.log | head -40; FAIL=1
 fi
 
 echo

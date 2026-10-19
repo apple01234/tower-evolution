@@ -14,10 +14,26 @@ local Net = require(Shared:WaitForChild("Net"))
 local Save = require(script.Parent:WaitForChild("Save"))
 local WorldSetup = require(script.Parent:WaitForChild("WorldSetup"))
 local AssetLoader = require(script.Parent:WaitForChild("AssetLoader"))
+local Progress = require(Shared:WaitForChild("Progress"))
 
 local Battle = {}
 
 local events = Net.init()
+Save._events = events
+
+-- 플레이어 1명에게 전체 상태를 전송 (입장/환생/연구 후)
+function Battle.syncPlayer(player: Player)
+	local st = Save.get(player)
+	if not st then
+		return
+	end
+	events.StateSync:FireClient(player, {
+		gold = st.gold,
+		slots = st.slots,
+		wave = currentWave,
+	})
+	Save.syncProgress(player)
+end
 
 -- 활성 적 (서버 권한)
 local enemies: { [number]: any } = {}
@@ -31,6 +47,9 @@ local baseMaxHp = 100
 -- StateSync 스로틀 (초당 과다 전송 방지 — RemoteEvent#Throttling 공식 권장)
 local SYNC_INTERVAL = 0.2 -- 5Hz
 local syncAccum = 0
+
+-- 이번 회차 보스 처치 여부 (환생 조건)
+local bossDefeatedThisRun = false
 
 -- 배치된 타워: [playerUserId] = { [cellKey] = {uid, key, cooldown, model} }
 local placed: { [number]: { [string]: any } } = {}
@@ -186,7 +205,19 @@ local function updateTowers(dt: number)
 
 			local distOf = makeDistanceFn(towerPos)
 			local pairOf = makePairDistance()
-			local hits = Combat.computeHits(def :: any, list, distOf, pairOf)
+			-- 연구 데미지 배율 적용 (원본 def는 불변이므로 사본 생성)
+			local ps = player and Save.ensureProgress(player) or nil
+			local dmgMult = ps and Progress.damageMultiplier(ps) or 1
+			local scaledDef = {
+				damage = def.damage * dmgMult,
+				attackKind = def.attackKind,
+				range = def.range,
+				pierceCount = def.pierceCount,
+				chainCount = def.chainCount,
+				chainFalloff = def.chainFalloff,
+				aoeRadius = def.aoeRadius,
+			}
+			local hits = Combat.computeHits(scaledDef :: any, list, distOf, pairOf)
 			if #hits == 0 then
 				continue
 			end
@@ -196,7 +227,14 @@ local function updateTowers(dt: number)
 			-- 보상 지급 (사망 즉시 alive=false이므로 중복 불가)
 			for _, k in killed do
 				if player and state then
-					state.gold = math.min(Config.MAX_GOLD, state.gold + k.reward)
+					-- 연구 배율 적용 (환생 영구 강화)
+					local ps = Save.ensureProgress(player)
+					local mult = Progress.goldMultiplier(ps)
+					local gain = math.floor(k.reward * mult)
+					state.gold = math.min(Config.MAX_GOLD, state.gold + gain)
+					if k.isBoss then
+						bossDefeatedThisRun = true
+					end
 				end
 				removeEnemy(k.id)
 			end
@@ -286,6 +324,13 @@ local function runWaves()
 					newEnemy(currentWave, false, zone)
 				end
 			end
+			-- 도달 웨이브 기록 (지역 해금/환생 조건에 사용)
+			for _, p in Players:GetPlayers() do
+				local ps = Save.ensureProgress(p)
+				if Progress.recordWave(ps, currentWave) then
+					Save.syncProgress(p)
+				end
+			end
 			events.Notify:FireAllClients(
 				string.format("웨이브 %d 시작 — %s", currentWave, zone.name),
 				isBoss and "boss" or "info"
@@ -328,7 +373,9 @@ function Battle.init()
 		if not st then
 			return
 		end
-		local cost = math.floor(Config.SUMMON_COST_BASE * (Config.SUMMON_COST_GROWTH ^ (#st.slots)))
+		local ps = Save.ensureProgress(player)
+		local baseCost = Config.SUMMON_COST_BASE * (Config.SUMMON_COST_GROWTH ^ (#st.slots))
+		local cost = math.floor(baseCost * Progress.summonCostMultiplier(ps))
 		if st.gold < cost then
 			events.Notify:FireClient(player, "골드가 부족합니다.", "bad")
 			return
@@ -384,7 +431,12 @@ function Battle.init()
 			return
 		end
 		local newSlot = Inventory.add(st, nextKey)
+		local ps = Save.ensureProgress(player)
+		local firstUnlock = Progress.unlockCollect(ps, nextKey)
 		local nd = TowerData.get(nextKey)
+		if firstUnlock then
+			events.Notify:FireClient(player, "도감 등록: " .. (nd and nd.name or nextKey), "good")
+		end
 		events.StateSync:FireClient(player, { gold = st.gold, slots = st.slots, wave = currentWave })
 		events.Notify:FireClient(player, "진화 성공: " .. (nd and nd.name or nextKey), "good")
 		-- 도감 해금은 후속 단계
@@ -518,6 +570,113 @@ function Battle.init()
 				return
 			end
 		end
+	end)
+
+	-- ============ 환생 ============
+	events.RequestRebirth.OnServerEvent:Connect(function(player)
+		if not allow(player, "UPGRADE") then
+			return
+		end
+		local st = Save.get(player)
+		local ps = Save.getProgress(player)
+		if not st or not ps then
+			return
+		end
+
+		-- 최고 웨이브는 ps가 보관
+		Progress.recordWave(ps, currentWave)
+		local ok, err = Progress.canRebirth(ps, bossDefeatedThisRun)
+		if not ok then
+			local msg = err == "NEED_WAVE" and "웨이브가 부족합니다."
+				or err == "NEED_GOLD" and "골드가 부족합니다."
+				or err == "NEED_BOSS" and "보스를 처치해야 합니다."
+				or "환생 조건 미달"
+			events.Notify:FireClient(player, msg, "bad")
+			return
+		end
+
+		if not Progress.applyRebirth(ps, Config.START_GOLD) then
+			return
+		end
+		-- 재화/인벤토리 초기화
+		st.gold = Config.START_GOLD
+		st.slots = {}
+		st.nextUid = 1
+		Inventory.add(st, "ApprenticeTurret")
+		-- 배치된 타워 제거
+		local cells = placed[player.UserId]
+		if cells then
+			for _, t in cells do
+				if t.model then
+					t.model:Destroy()
+				end
+			end
+			placed[player.UserId] = {}
+		end
+		bossDefeatedThisRun = false
+		currentWave = 0
+		baseHp = baseMaxHp
+		Save.save(player)
+
+		events.StateSync:FireClient(player, { gold = st.gold, slots = st.slots, wave = 0 })
+		events.Notify:FireClient(player, string.format("환생 완료 — %d회차", ps.rebirths), "good")
+		Save.syncProgress(player)
+	end)
+
+	-- ============ 연구 구매 ============
+	events.RequestResearch.OnServerEvent:Connect(function(player, key)
+		if not allow(player, "UPGRADE") then
+			return
+		end
+		if type(key) ~= "string" then
+			return
+		end
+		local ps = Save.getProgress(player)
+		if not ps then
+			return
+		end
+		local ok, err = Progress.buyResearch(ps, key)
+		if not ok then
+			local msg = err == "MAX_LEVEL" and "최대 레벨입니다."
+				or err == "NOT_ENOUGH_POINTS" and "연구 포인트가 부족합니다."
+				or "연구 실패"
+			events.Notify:FireClient(player, msg, "bad")
+			return
+		end
+		Save.save(player)
+		local def = Progress.RESEARCH[key]
+		events.Notify:FireClient(player, string.format("%s Lv.%d", def and def.name or key, ps.research[key]), "good")
+		Save.syncProgress(player)
+	end)
+
+	-- ============ 지역 이동 ============
+	events.RequestZone.OnServerEvent:Connect(function(player, zoneId)
+		if not allow(player, "UPGRADE") then
+			return
+		end
+		if type(zoneId) ~= "string" then
+			return
+		end
+		local ps = Save.getProgress(player)
+		if not ps then
+			return
+		end
+		local target = nil
+		for _, z in Lore.ZONES do
+			if z.id == zoneId then
+				target = z
+				break
+			end
+		end
+		if not target then
+			return
+		end
+		if not Progress.isZoneUnlocked(ps, target.id, target.unlockWave) then
+			events.Notify:FireClient(player, string.format("%s은(는) 웨이브 %d에서 해금됩니다.", target.kingdom, target.unlockWave), "bad")
+			return
+		end
+		events.Notify:FireClient(player, target.kingdom .. " · " .. target.name .. "으로 이동", "good")
+		Save.syncProgress(player)
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)

@@ -4,6 +4,7 @@ local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
 local Inventory = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Inventory"))
+local Progress = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Progress"))
 
 local Save = {}
 
@@ -17,6 +18,7 @@ if not ok then
 end
 
 local cache: { [number]: Inventory.State } = {}
+local progressCache: { [number]: Progress.State } = {}
 
 local function defaultState(): Inventory.State
 	local st = Inventory.new(Config.START_GOLD)
@@ -49,6 +51,41 @@ local function sanitize(raw: any): Inventory.State
 	return st
 end
 
+-- 영구 성장 데이터 복원 (환생/연구/도감/지역)
+local function sanitizeProgress(raw: any): Progress.State
+	local ps = Progress.new(Config.START_GOLD)
+	if type(raw) ~= "table" then
+		return ps
+	end
+	ps.rebirths = math.max(0, math.floor(tonumber(raw.rebirths) or 0))
+	ps.maxWaveEver = math.max(0, math.floor(tonumber(raw.maxWaveEver) or 0))
+	ps.wave = math.max(0, math.floor(tonumber(raw.wave) or 0))
+
+	if type(raw.research) == "table" then
+		for k, v in raw.research do
+			if type(k) == "string" and Progress.RESEARCH[k] then
+				local lv = math.max(0, math.floor(tonumber(v) or 0))
+				ps.research[k] = math.min(lv, Progress.RESEARCH[k].maxLevel)
+			end
+		end
+	end
+	if type(raw.collection) == "table" then
+		for k, v in raw.collection do
+			if type(k) == "string" and v == true then
+				ps.collection[k] = true
+			end
+		end
+	end
+	if type(raw.zoneUnlocked) == "table" then
+		for k, v in raw.zoneUnlocked do
+			if type(k) == "string" and v == true then
+				ps.zoneUnlocked[k] = true
+			end
+		end
+	end
+	return ps
+end
+
 function Save.load(player: Player): Inventory.State
 	if cache[player.UserId] then
 		return cache[player.UserId]
@@ -70,16 +107,32 @@ function Save.load(player: Player): Inventory.State
 		end
 		if success then
 			st = sanitize(result)
+			progressCache[player.UserId] = sanitizeProgress(result)
 		else
 			warn("[Save] 로드 실패 " .. player.Name .. ": " .. tostring(result))
 		end
 	end
 	cache[player.UserId] = st
+	progressCache[player.UserId] = progressCache[player.UserId] or sanitizeProgress(nil)
 	return st
 end
 
 function Save.get(player: Player): Inventory.State?
 	return cache[player.UserId]
+end
+
+function Save.getProgress(player: Player): Progress.State?
+	return progressCache[player.UserId]
+end
+
+-- 진행 상태를 확보 (없으면 생성)
+function Save.ensureProgress(player: Player): Progress.State
+	local ps = progressCache[player.UserId]
+	if not ps then
+		ps = Progress.new(Config.START_GOLD)
+		progressCache[player.UserId] = ps
+	end
+	return ps
 end
 
 function Save.save(player: Player): boolean
@@ -94,11 +147,18 @@ function Save.save(player: Player): boolean
 	for attempt = 1, 3 do
 		local ds = store
 		local success, result = pcall(function()
+			local ps = progressCache[player.UserId]
 			ds:SetAsync(keyOf(player.UserId), {
 				gold = st.gold,
 				slots = st.slots,
 				nextUid = st.nextUid,
-				version = 1,
+				version = 2, -- v2: progress 필드 추가
+				rebirths = ps and ps.rebirths or 0,
+				maxWaveEver = ps and ps.maxWaveEver or 0,
+				wave = ps and ps.wave or 0,
+				research = ps and ps.research or {},
+				collection = ps and ps.collection or {},
+				zoneUnlocked = ps and ps.zoneUnlocked or {},
 			})
 		end)
 		if success then
@@ -110,8 +170,42 @@ function Save.save(player: Player): boolean
 	return false
 end
 
+-- Battle.init()이 주입한다 (순환 require 회피)
+Save._events = nil :: any
+
+-- 진행 상태를 클라이언트로 전송 (Research 비용/배율 포함)
+function Save.syncProgress(player: Player)
+	local ps = progressCache[player.UserId]
+	if not ps then
+		return
+	end
+	local events = Save._events
+	if not events then
+		return
+	end
+	local costs = {}
+	for _, key in Progress.RESEARCH_ORDER do
+		costs[key] = Progress.researchCost(key, Progress.researchLevel(ps, key))
+	end
+	events.ProgressSync:FireClient(player, {
+		rebirths = ps.rebirths,
+		points = Progress.researchPoints(ps),
+		research = ps.research,
+		costs = costs,
+		collection = ps.collection,
+		collectedCount = Progress.collectedCount(ps),
+		maxWaveEver = ps.maxWaveEver,
+		zoneUnlocked = ps.zoneUnlocked,
+		goldMult = Progress.goldMultiplier(ps),
+		damageMult = Progress.damageMultiplier(ps),
+		summonMult = Progress.summonCostMultiplier(ps),
+		summary = Progress.summary(ps),
+	})
+end
+
 function Save.release(player: Player)
 	cache[player.UserId] = nil
+	progressCache[player.UserId] = nil
 end
 
 Players.PlayerRemoving:Connect(function(player)

@@ -12,9 +12,13 @@ local EVENTS = {
 	"RequestPickup", -- (col, row)
 	"RequestUpgrade", -- (uid: string)
 	"RequestSell", -- (uid: string)
+	"RequestRebirth", -- () 환생
+	"RequestResearch", -- (key: string) 연구 구매
+	"RequestZone", -- (zoneId: string) 지역 이동
 
 	"StateSync", -- (state) 서버 -> 클라이언트
 	"WaveSync", -- (wave, isBoss, bossHp, bossMaxHp)
+	"ProgressSync", -- (progress) 서버 -> 클라이언트
 	"Notify", -- (msg, kind)
 }
 

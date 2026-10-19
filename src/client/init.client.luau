@@ -30,6 +30,8 @@ local isBoss = false
 local bossHp, bossMax = 0, 0
 local baseHp, baseMax = 100, 100
 local selectedFuse: { [string]: boolean } = {}
+local progressState: any = nil
+local growthOpen = false
 
 -- ============ GUI ============
 local gui = mk(playerGui, "ScreenGui", {
@@ -179,6 +181,136 @@ end
 
 local summonBtn = mkButton("타워 소환", Color3.fromRGB(50, 120, 80), 1)
 local fuseBtn = mkButton("선택 합성", Color3.fromRGB(120, 80, 200), 2)
+local growthBtn = mkButton("성장", Color3.fromRGB(200, 140, 40), 3)
+
+-- ============ 성장 패널 (환생 / 연구 / 도감) ============
+local growthPanel = mk(gui, "Frame", {
+	Name = "GrowthPanel",
+	Size = UDim2.new(0, 460, 0, 340),
+	Position = UDim2.new(0.5, -230, 0.5, -170),
+	BackgroundColor3 = Color3.fromRGB(16, 18, 26),
+	BorderSizePixel = 0,
+	Visible = false,
+})
+
+mk(growthPanel, "TextLabel", {
+	Size = UDim2.new(1, -20, 0, 28),
+	Position = UDim2.new(0, 12, 0, 8),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold,
+	TextSize = 18,
+	TextColor3 = Color3.fromRGB(240, 220, 150),
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Text = "성장",
+})
+
+local growthSummary = mk(growthPanel, "TextLabel", {
+	Size = UDim2.new(1, -20, 0, 20),
+	Position = UDim2.new(0, 12, 0, 36),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.Gotham,
+	TextSize = 13,
+	TextColor3 = Color3.fromRGB(170, 180, 200),
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Text = "환생 0회 · 최고 웨이브 0 · 도감 0",
+})
+
+local pointLabel = mk(growthPanel, "TextLabel", {
+	Size = UDim2.new(1, -20, 0, 20),
+	Position = UDim2.new(0, 12, 0, 56),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold,
+	TextSize = 14,
+	TextColor3 = Color3.fromRGB(140, 220, 255),
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Text = "연구 포인트: 0",
+})
+
+-- 연구 목록
+local researchScroll = mk(growthPanel, "ScrollingFrame", {
+	Size = UDim2.new(1, -24, 0, 180),
+	Position = UDim2.new(0, 12, 0, 80),
+	BackgroundTransparency = 1,
+	CanvasSize = UDim2.new(0, 0, 0, 0),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	ScrollBarThickness = 6,
+	BorderSizePixel = 0,
+})
+mk(researchScroll, "UIListLayout", {
+	Padding = UDim.new(0, 6),
+	SortOrder = Enum.SortOrder.LayoutOrder,
+})
+
+local rebirthBtn = mk(growthPanel, "TextButton", {
+	Size = UDim2.new(1, -24, 0, 38),
+	Position = UDim2.new(0, 12, 1, -52),
+	BackgroundColor3 = Color3.fromRGB(160, 60, 60),
+	BorderSizePixel = 0,
+	Font = Enum.Font.GothamBold,
+	TextSize = 15,
+	TextColor3 = Color3.fromRGB(255, 255, 255),
+	Text = "환생",
+})
+
+local closeBtn = mk(growthPanel, "TextButton", {
+	Size = UDim2.new(0, 28, 0, 28),
+	Position = UDim2.new(1, -36, 0, 8),
+	BackgroundColor3 = Color3.fromRGB(60, 64, 78),
+	BorderSizePixel = 0,
+	Font = Enum.Font.GothamBold,
+	TextSize = 16,
+	TextColor3 = Color3.fromRGB(230, 235, 245),
+	Text = "X",
+})
+
+local researchRows: { [string]: any } = {}
+
+local function renderGrowth()
+	if not progressState then
+		return
+	end
+	growthSummary.Text = progressState.summary or ""
+	pointLabel.Text = string.format("연구 포인트: %d", progressState.points or 0)
+
+	-- 연구 행 생성/갱신
+	for _, key in { "goldGain", "towerDamage", "summonCost", "evolveMaterial" } do
+		local row = researchRows[key]
+		local lv = (progressState.research or {})[key] or 0
+		local cost = (progressState.costs or {})[key]
+		if not row then
+			local btn = mk(researchScroll, "TextButton", {
+				Name = key,
+				Size = UDim2.new(1, -8, 0, 38),
+				BackgroundColor3 = Color3.fromRGB(30, 34, 46),
+				BorderSizePixel = 0,
+				Font = Enum.Font.Gotham,
+				TextSize = 13,
+				TextColor3 = Color3.fromRGB(225, 232, 245),
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Text = "",
+			})
+			row = btn
+			researchRows[key] = btn
+			btn.Activated:Connect(function()
+				local ev = Net.get("RequestResearch")
+				if ev then
+					ev:FireServer(key)
+				end
+			end)
+		end
+		local names = {
+			goldGain = "골드 획득량",
+			towerDamage = "타워 공격력",
+			summonCost = "소환 비용 절감",
+			evolveMaterial = "진화 재료 획득",
+		}
+		local costText = cost and string.format(" · %dpt", cost) or " · MAX"
+		row.Text = string.format("  %s  Lv.%d%s", names[key] or key, lv, costText)
+		row.BackgroundColor3 = (cost and (progressState.points or 0) >= cost)
+			and Color3.fromRGB(40, 70, 55)
+			or Color3.fromRGB(30, 34, 46)
+	end
+end
 
 -- 알림
 local notify = mk(gui, "TextLabel", {
@@ -362,6 +494,37 @@ local function bindEvents()
 			showNotify(tostring(msg), tostring(kind or "info"))
 		end)
 	end
+
+	local progressEv = Net.get("ProgressSync")
+	if progressEv then
+		progressEv.OnClientEvent:Connect(function(payload)
+			if type(payload) ~= "table" then
+				return
+			end
+			progressState = payload
+			renderGrowth()
+		end)
+	end
+
+	growthBtn.Activated:Connect(function()
+		growthOpen = not growthOpen
+		growthPanel.Visible = growthOpen
+		if growthOpen then
+			renderGrowth()
+		end
+	end)
+
+	closeBtn.Activated:Connect(function()
+		growthOpen = false
+		growthPanel.Visible = false
+	end)
+
+	rebirthBtn.Activated:Connect(function()
+		local ev = Net.get("RequestRebirth")
+		if ev then
+			ev:FireServer()
+		end
+	end)
 
 	local summonEv = Net.get("RequestSummon")
 	local fuseEv = Net.get("RequestFuse")
