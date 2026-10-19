@@ -1,0 +1,105 @@
+name: Build & Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Roblox에 게시할지 여부"
+        type: boolean
+        default: false
+
+env:
+  ROJO_VERSION: "7.7.1"
+  LUNE_VERSION: "0.11.0"
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rojo
+        run: |
+          mkdir -p "$HOME/.tools" && cd "$HOME/.tools"
+          curl -sL -o rojo.zip \
+            "https://github.com/rojo-rbx/rojo/releases/download/v${ROJO_VERSION}/rojo-${ROJO_VERSION}-linux-x86_64.zip"
+          unzip -oq rojo.zip -d rojo && chmod +x rojo/rojo
+          echo "$HOME/.tools/rojo" >> "$GITHUB_PATH"
+
+      - name: Install Lune
+        run: |
+          mkdir -p "$HOME/.tools" && cd "$HOME/.tools"
+          curl -sL -o lune.zip \
+            "https://github.com/lune-org/lune/releases/download/v${LUNE_VERSION}/lune-${LUNE_VERSION}-linux-x86_64.zip"
+          unzip -oq lune.zip -d lune && chmod +x lune/lune
+          echo "$HOME/.tools/lune" >> "$GITHUB_PATH"
+
+      - name: Build place file
+        run: rojo build -o TowerEvolution.rbxlx
+
+      - name: Syntax gate
+        run: lune run tests/syntax.test.luau TowerEvolution.rbxlx
+
+      - name: Logic tests
+        run: lune run tests/logic.test.luau
+
+      - name: Lore tests
+        run: lune run tests/lore.test.luau
+
+      - name: Upload place artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TowerEvolution-place
+          path: TowerEvolution.rbxlx
+          retention-days: 30
+
+      # 게시 단계: 수동 실행 + publish=true 일 때만
+      # (secrets는 if: 표현식에서 직접 참조 불가 → env로 주입 후 step 내부에서 검사)
+      - name: Publish to Roblox
+        if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          ROBLOX_UNIVERSE_ID: ${{ secrets.ROBLOX_UNIVERSE_ID }}
+          ROBLOX_PLACE_ID: ${{ secrets.ROBLOX_PLACE_ID }}
+        run: |
+          set -euo pipefail
+
+          missing=""
+          [ -z "${ROBLOX_API_KEY:-}" ]    && missing="$missing ROBLOX_API_KEY"
+          [ -z "${ROBLOX_UNIVERSE_ID:-}" ] && missing="$missing ROBLOX_UNIVERSE_ID"
+          [ -z "${ROBLOX_PLACE_ID:-}" ]    && missing="$missing ROBLOX_PLACE_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::다음 Secrets가 비어 있습니다:$missing"
+            echo "저장소 Settings → Secrets and variables → Actions 에서 추가하세요."
+            exit 1
+          fi
+
+          # 키 형식 사전 검증 (불필요한 API 호출 방지)
+          KEYLEN=${#ROBLOX_API_KEY}
+          if [ "$KEYLEN" -lt 100 ]; then
+            echo "::error::ROBLOX_API_KEY 길이가 비정상입니다 (${KEYLEN}자). 값이 잘렸는지 확인하세요."
+            exit 1
+          fi
+          echo "키 길이 확인: ${KEYLEN}자"
+
+          RESP=$(curl -sS -w "\n%{http_code}" -X POST \
+            "https://apis.roblox.com/universes/v1/${ROBLOX_UNIVERSE_ID}/places/${ROBLOX_PLACE_ID}/versions?versionType=Published" \
+            -H "x-api-key: ${ROBLOX_API_KEY}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @TowerEvolution.rbxlx)
+          BODY=$(echo "$RESP" | head -n -1)
+          CODE=$(echo "$RESP" | tail -n1)
+          echo "HTTP $CODE"
+          echo "$BODY"
+          if [ "$CODE" != "200" ]; then
+            echo "::error::게시 실패 (HTTP $CODE)"
+            case "$CODE" in
+              401) echo "::error::API 키가 유효하지 않습니다." ;;
+              403) echo "::error::universe-places 스코프(Write) 권한이 없습니다." ;;
+              404) echo "::error::Universe ID 또는 Place ID가 잘못되었습니다." ;;
+            esac
+            exit 1
+          fi
+          echo "::notice::게시 성공: $BODY"

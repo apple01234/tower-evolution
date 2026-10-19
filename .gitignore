@@ -1,0 +1,13 @@
+# 빌드 산출물 (CI에서 재생성)
+*.rbxlx
+*.rbxl
+
+# 로그
+*.log
+
+# 에디터
+.vscode/
+.idea/
+
+# OS
+.DS_Store

@@ -1,0 +1,278 @@
+--!strict
+-- 이그드라실 세계관 / 지역 / 보스 설정
+-- SERTZ(CERTZ) 원본 스토리에서 세계관만 차용. 게임 구조는 Tower Evolution Simulator 고유 설계.
+-- 즉, 이 파일은 "이름과 배경"만 담는다. 전투/합성 로직은 이 데이터를 참조하지 않는다.
+
+export type ZoneDef = {
+	id: string,
+	kingdom: string,
+	num: number,
+	name: string,
+	subtitle: string,
+	bossKey: string,
+	unlockWave: number,
+	hpMult: number,
+	enemyPool: { string },
+	tint: string,
+}
+
+export type BossDef = {
+	key: string,
+	name: string,
+	kingdomNum: number,
+	hp: number,
+	atk: number,
+	speed: number,
+	exp: number,
+	gold: number,
+	signature: string,
+	lore: string,
+}
+
+local Lore = {}
+
+-- 9왕국. num은 원본 챕터 번호를 그대로 유지해 스토리 순서를 보존한다.
+Lore.ZONES = {
+	{
+		id = "Midgard_Forest",
+		kingdom = "미드가르드",
+		num = 2,
+		name = "숲의 신전",
+		subtitle = "미드가르드 서쪽 숲",
+		bossKey = "guardian",
+		unlockWave = 0,
+		hpMult = 1.0,
+		enemyPool = { "wolf", "spider", "swampbeast", "golem" },
+		tint = "#0a1408",
+	},
+	{
+		id = "Kusodia",
+		kingdom = "쿠소디아",
+		num = 3,
+		name = "선박의 왕국",
+		subtitle = "쿠소디아 · 늪지대",
+		bossKey = "behemoth",
+		unlockWave = 15,
+		hpMult = 1.6,
+		enemyPool = { "swampbeast", "wolf", "golem", "imp", "rat" },
+		tint = "#0d1808",
+	},
+	{
+		id = "Alfheim",
+		kingdom = "알프헤임",
+		num = 4,
+		name = "요정의 성전",
+		subtitle = "알프헤임 · 빛의 결정",
+		bossKey = "nidhog",
+		unlockWave = 30,
+		hpMult = 2.6,
+		enemyPool = { "minion", "wraith", "spider", "bat", "icezombie" },
+		tint = "#0d0a1e",
+	},
+	{
+		id = "Muspelheim",
+		kingdom = "무스펠헤임",
+		num = 5,
+		name = "극열의 해역",
+		subtitle = "무스펠헤임 · 화산 지대",
+		bossKey = "surt",
+		unlockWave = 45,
+		hpMult = 4.2,
+		enemyPool = { "firegiant", "imp", "wraith", "salamander" },
+		tint = "#1a0805",
+	},
+	{
+		id = "Niflheim",
+		kingdom = "니플헤임",
+		num = 6,
+		name = "극한의 해역",
+		subtitle = "니플헤임 · 얼음의 성전",
+		bossKey = "fenrir",
+		unlockWave = 60,
+		hpMult = 6.8,
+		enemyPool = { "icezombie", "wolf", "wraith", "frostgiant" },
+		tint = "#05101a",
+	},
+	{
+		id = "Svartalfheim",
+		kingdom = "스바르트알프헤임",
+		num = 7,
+		name = "어둠 요정들의 해역",
+		subtitle = "스바르트알프헤임 · 수정 광맥",
+		bossKey = "abysslord",
+		unlockWave = 75,
+		hpMult = 11.0,
+		enemyPool = { "darkelf", "crystalbeast", "wraith", "bat" },
+		tint = "#12081a",
+	},
+	{
+		id = "Nidavellir",
+		kingdom = "니다벨리르",
+		num = 8,
+		name = "난쟁이들의 해역",
+		subtitle = "니다벨리르 · 룬 광산",
+		bossKey = "skoll",
+		unlockWave = 90,
+		hpMult = 18.0,
+		enemyPool = { "dwarf", "runeconstruct", "golem", "wolf" },
+		tint = "#0e1208",
+	},
+	{
+		id = "Hel",
+		kingdom = "헬",
+		num = 9,
+		name = "절벽 너머의 해역",
+		subtitle = "헬 · 대전쟁의 땅",
+		bossKey = "gram",
+		unlockWave = 105,
+		hpMult = 30.0,
+		enemyPool = { "draugr", "helhound", "wraith", "skeletonking" },
+		tint = "#0a0a12",
+	},
+	{
+		id = "Abyss",
+		kingdom = "세계수의 뿌리",
+		num = 10,
+		name = "심연의 근원",
+		subtitle = "아뜰란티스 · 종언의 왕좌",
+		bossKey = "abudditos",
+		unlockWave = 120,
+		hpMult = 50.0,
+		enemyPool = { "abyssspawn", "dragon", "wraith", "jormungandrspawn" },
+		tint = "#05050a",
+	},
+}
+
+-- 보스 9종. hp/atk는 원본 밸런스 스케일을 계승하되,
+-- 타워 디펜스 특성상 전투 길이를 고려해 hp는 원본의 1/10로 스케일한다.
+Lore.BOSSES = {
+	guardian = {
+		key = "guardian",
+		name = "심연의 수호자",
+		kingdomNum = 2,
+		hp = 320,
+		atk = 24,
+		speed = 92,
+		exp = 320,
+		gold = 220,
+		signature = "slam",
+		lore = "미드가르드 숲의 신전을 지키는 심연의 파수꾼. 지진으로 길을 끊는다.",
+	},
+	behemoth = {
+		key = "behemoth",
+		name = "눈보라의 거수",
+		kingdomNum = 3,
+		hp = 520,
+		atk = 31,
+		speed = 85,
+		exp = 500,
+		gold = 320,
+		signature = "frostnova",
+		lore = "쿠소디아의 늪을 얼려 버린 거수. 빙결의 신성으로 발을 묶는다.",
+	},
+	nidhog = {
+		key = "nidhog",
+		name = "탐식의 드래곤 니드호그",
+		kingdomNum = 4,
+		hp = 360,
+		atk = 26,
+		speed = 100,
+		exp = 380,
+		gold = 260,
+		signature = "poisonfield",
+		lore = "세계수의 뿌리를 갉아먹는 용. 알프헤임의 빛을 삼키려 한다.",
+	},
+	surt = {
+		key = "surt",
+		name = "화염의 거인 수르트",
+		kingdomNum = 5,
+		hp = 540,
+		atk = 33,
+		speed = 78,
+		exp = 560,
+		gold = 360,
+		signature = "firepillars",
+		lore = "무스펠헤임을 다스리는 불의 거인. 라그나로크의 불꽃을 부른다.",
+	},
+	fenrir = {
+		key = "fenrir",
+		name = "탐욕의 늑대 펜리르",
+		kingdomNum = 6,
+		hp = 740,
+		atk = 36,
+		speed = 130,
+		exp = 640,
+		gold = 420,
+		signature = "blink",
+		lore = "신들의 속박을 끊어낸 늑대. 니플헤임의 얼음 감옥도 그를 막지 못했다.",
+	},
+	abysslord = {
+		key = "abysslord",
+		name = "심연의 군주",
+		kingdomNum = 7,
+		hp = 850,
+		atk = 38,
+		speed = 95,
+		exp = 800,
+		gold = 520,
+		signature = "crystalburst",
+		lore = "스바르트알프헤임 수정 광맥 아래 잠든 군주. 결정을 무기로 부린다.",
+	},
+	skoll = {
+		key = "skoll",
+		name = "교만의 쌍랑 스콜&하티",
+		kingdomNum = 8,
+		hp = 1200,
+		atk = 42,
+		speed = 140,
+		exp = 720,
+		gold = 600,
+		signature = "blinkslash",
+		lore = "해와 달을 쫓는 쌍둥이 늑대. 니다벨리르의 룬 광산을 포식한다.",
+	},
+	gram = {
+		key = "gram",
+		name = "혈안의 문지기 가름",
+		kingdomNum = 9,
+		hp = 2000,
+		atk = 48,
+		speed = 110,
+		exp = 860,
+		gold = 800,
+		signature = "blinkslash",
+		lore = "헬의 대문을 지키는 사냥개. 망자의 길목을 지킨다.",
+	},
+	abudditos = {
+		key = "abudditos",
+		name = "종언의 마룡 아부디토스",
+		kingdomNum = 10,
+		hp = 3400,
+		atk = 54,
+		speed = 100,
+		exp = 1200,
+		gold = 1200,
+		signature = "holymantle",
+		lore = "키(세계관)의 근원인 아뜰란티스의 종언 그 자체. 세계수의 뿌리에서 모든 것을 끝내려 한다.",
+	},
+}
+
+Lore.BOSS_ORDER = { "guardian", "behemoth", "nidhog", "surt", "fenrir", "abysslord", "skoll", "gram", "abudditos" }
+
+function Lore.zoneForWave(wave: number): ZoneDef
+	local best = Lore.ZONES[1]
+	for _, z in Lore.ZONES do
+		if wave >= z.unlockWave then
+			best = z
+		end
+	end
+	return best
+end
+
+function Lore.getBoss(key: string): BossDef?
+	return (Lore.BOSSES :: any)[key]
+end
+
+-- 최종 보스 체력은 원본 스케일(종언 존재)을 반영해 별도 배율
+Lore.FINAL_BOSS_KEY = "abudditos"
+
+return Lore
