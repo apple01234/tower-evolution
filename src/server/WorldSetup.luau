@@ -84,11 +84,12 @@ local function applyAmbience(theme: any)
 	Lighting.ColorShift_Top = fog
 end
 
-local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, mat: Enum.Material, color: Color3): Part
+local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, mat: Enum.Material, color: Color3, collide: boolean?): Part
 	local p = Instance.new("Part")
 	p.Name = name
 	p.Anchored = true
-	p.CanCollide = false
+	-- 기본은 충돌 없음(장식). 바닥/경로처럼 밟아야 하는 것은 collide=true 로 넘긴다.
+	p.CanCollide = collide == true
 	p.Size = size
 	p.CFrame = cf
 	p.Material = mat
@@ -115,14 +116,15 @@ function WorldSetup.build(zoneId: string?)
 		z = Config.GRID_ROWS * Config.CELL_SIZE + 24,
 	}
 
-	-- 바닥
+	-- 바닥 (밟을 수 있어야 한다: collide = true)
 	local ground = part(
 		arena,
 		"Ground",
 		Vector3.new(bounds.x, 2, bounds.z),
 		CFrame.new(WorldSetup.ORIGIN - Vector3.new(0, 1, 0)),
 		MapThemes.toMaterial(theme.groundMaterial),
-		MapThemes.toColor3(theme.groundColor)
+		MapThemes.toColor3(theme.groundColor),
+		true
 	)
 	ground.TopSurface = Enum.SurfaceType.Smooth
 
@@ -136,13 +138,30 @@ function WorldSetup.build(zoneId: string?)
 			Vector3.new(Config.CELL_SIZE * 0.9, 0.4, (b - a).Magnitude),
 			CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.rad(90), 0),
 			MapThemes.toMaterial(theme.pathMaterial),
-			MapThemes.toColor3(theme.pathColor)
+			MapThemes.toColor3(theme.pathColor),
+			false
 		)
 	end
 
 	-- 스폰 / 기지 표식
 	part(arena, "SpawnMark", Vector3.new(4, 0.5, 4),
 		CFrame.new(pts[1] + Vector3.new(0, 0.3, 0)), Enum.Material.Neon, MapThemes.toColor3(theme.spawnColor))
+
+	-- 실제 스폰 지점. 없으면 플레이어가 허공에 떨어져 바닥을 뚫고 낙하한다.
+	-- 바닥 윗면(y=0)보다 살짝 위에 두고, 경로 시작점에서 옆으로 띄운다.
+	local spawnPos = pts[1] + Vector3.new(0, 0.5, 10)
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "PlayerSpawn"
+	spawn.Anchored = true
+	spawn.CanCollide = true
+	spawn.Size = Vector3.new(8, 1, 8)
+	spawn.CFrame = CFrame.new(spawnPos)
+	spawn.Material = Enum.Material.SmoothPlastic
+	spawn.Color = MapThemes.toColor3(theme.spawnColor)
+	spawn.TopSurface = Enum.SurfaceType.Smooth
+	spawn.Neutral = true
+	spawn.Duration = 0
+	spawn.Parent = arena
 
 	part(arena, "BaseMark", Vector3.new(6, 1, 6),
 		CFrame.new(pts[#pts] + Vector3.new(0, 0.5, 0)), Enum.Material.Neon, MapThemes.toColor3(theme.baseColor))

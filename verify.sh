@@ -39,12 +39,22 @@ fi
 
 echo
 echo "=============================================="
-echo " 4/14  에셋 클래스 검증 (Model 아닌 에셋)"
+echo " 4/15  에셋 클래스 검증 (Model 아닌 에셋)"
 echo "=============================================="
 if $LUNE run tests/assetclass.test.luau assets_clean > /tmp/assetclass.log 2>&1; then
 	grep -E "=====" /tmp/assetclass.log | sed 's/^/PASS  /'
 else
 	echo "FAIL  에셋 클래스"; grep -A30 "문제 목록" /tmp/assetclass.log | head -30; FAIL=1
+fi
+
+echo
+echo "=============================================="
+echo " 5/15  월드 검증 (스폰/바닥 충돌)"
+echo "=============================================="
+if $LUNE run tests/world.test.luau . > /tmp/world.log 2>&1; then
+	grep -E "=====" /tmp/world.log | sed 's/^/PASS  /'
+else
+	echo "FAIL  월드"; grep -A8 "FAIL" /tmp/world.log | head -20; FAIL=1
 fi
 
 echo
