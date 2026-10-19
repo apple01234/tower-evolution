@@ -19,12 +19,22 @@ fi
 
 echo
 echo "=============================================="
-echo " 2/12  스크립트 문법 검증"
+echo " 2/13  스크립트 문법 검증"
 echo "=============================================="
 if $LUNE run tests/syntax.test.luau TowerEvolution.rbxlx > /tmp/syntax.log 2>&1; then
 	grep -E "=====" /tmp/syntax.log | sed 's/^/PASS  /'
 else
 	echo "FAIL  문법 오류"; grep -A3 "FAIL" /tmp/syntax.log | head -40; FAIL=1
+fi
+
+echo
+echo "=============================================="
+echo " 3/13  모듈 구조 검증 (Rojo init 규칙)"
+echo "=============================================="
+if $LUNE run tests/structure.test.luau . > /tmp/structure.log 2>&1; then
+	grep -E "=====" /tmp/structure.log | sed 's/^/PASS  /'
+else
+	echo "FAIL  모듈 구조"; grep -A5 "FAIL" /tmp/structure.log | head -20; FAIL=1
 fi
 
 echo
