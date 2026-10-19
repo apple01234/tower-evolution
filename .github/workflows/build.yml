@@ -42,6 +42,12 @@ jobs:
       - name: Syntax gate
         run: lune run tests/syntax.test.luau TowerEvolution.rbxlx
 
+      - name: Structure gate (Rojo init 규칙)
+        run: lune run tests/structure.test.luau .
+
+      - name: Asset class gate (Model 아닌 에셋)
+        run: lune run tests/assetclass.test.luau assets_clean
+
       - name: Logic tests
         run: lune run tests/logic.test.luau
 
@@ -54,6 +60,28 @@ jobs:
           name: TowerEvolution-place
           path: TowerEvolution.rbxlx
           retention-days: 30
+
+      # Windows 사용자가 Studio 에서 바로 열 수 있도록 릴리스에 첨부한다.
+      # .gitignore 가 *.rbxlx 를 제외하므로(CI 재생성 대상) 리포에는 커밋하지 않는다.
+      - name: Attach place file to release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          TAG="build-${GITHUB_RUN_NUMBER}"
+          ASSET="TowerEvolution-${TAG}.rbxlx"
+          cp TowerEvolution.rbxlx "$ASSET"
+          gh release create "$TAG" "$ASSET" \
+            --title "Tower Evolution ${TAG} (${SHORT_SHA})" \
+            --notes "커밋 ${SHORT_SHA} 자동 빌드.
+
+          Roblox Studio 에서 열기: 다운로드 후 File > Open.
+
+          - 에셋 24종 파일 내장 (런타임 다운로드 불필요)
+          - 문법/구조/에셋클래스/로직/세계관 검증 통과" \
+            --repo "${GITHUB_REPOSITORY}" || true
 
       # 게시 단계: 수동 실행 + publish=true 일 때만
       # (secrets는 if: 표현식에서 직접 참조 불가 → env로 주입 후 step 내부에서 검사)
