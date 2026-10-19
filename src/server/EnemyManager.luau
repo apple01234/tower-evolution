@@ -134,13 +134,15 @@ function EnemyManager.update(dt: number, onBaseHit: (number) -> ()): boolean
 	end
 
 	local hit = false
+	local now = os.clock()
 	for id, e in State.enemies do
 		if not e.alive then
 			EnemyManager.remove(id)
 			continue
 		end
 
-		e.pos += e.speed * dt
+		-- 둔화 적용 (Frost 계열)
+		e.pos += Combat.effectiveSpeed(e, now) * dt
 		if e.pos >= pathLen then
 			onBaseHit(e.isBoss and 25 or 5)
 			e.alive = false

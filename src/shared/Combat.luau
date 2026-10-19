@@ -8,10 +8,14 @@ export type Enemy = {
 	id: number,
 	hp: number,
 	maxHp: number,
-	pos: number, -- 경로상 진행도 (0..1 아님, 월드 거리 기반 누적)
+	pos: number,
 	alive: boolean,
 	reward: number,
 	isBoss: boolean,
+	speed: number,
+	-- 둔화 상태 (Frost 계열)
+	slowUntil: number?,
+	slowFactor: number?,
 }
 
 export type Hit = {
@@ -121,7 +125,8 @@ end
 
 -- 피해 적용. 이미 죽은 적은 무시하고, 사망한 적 목록을 반환한다.
 -- 보상 중복 지급 방지를 위해 alive 플래그를 즉시 내린다.
-function Combat.applyHits(enemies: { [number]: Enemy }, hits: { Hit }): ({ Enemy }, number)
+-- slow: { factor, duration } 가 있으면 명중한 생존 적에 둔화를 건다.
+function Combat.applyHits(enemies: { [number]: Enemy }, hits: { Hit }, slow: { factor: number, duration: number }?): ({ Enemy }, number)
 	local killed: { Enemy } = {}
 	local totalDamage = 0
 	for _, h in hits do
@@ -133,10 +138,25 @@ function Combat.applyHits(enemies: { [number]: Enemy }, hits: { Hit }): ({ Enemy
 				e.hp = 0
 				e.alive = false -- 중복 보상 방지의 핵심
 				table.insert(killed, e)
+			elseif slow then
+				-- 둔화: 남은 시간과 배율을 갱신 (더 강한 쪽 유지)
+				local cur = e.slowUntil or 0
+				local untilT = (e.now or 0) + slow.duration
+				e.slowUntil = math.max(cur, untilT)
+				e.slowFactor = math.min(e.slowFactor or 1, slow.factor)
 			end
 		end
 	end
 	return killed, totalDamage
+end
+
+-- 둔화 만료 처리 및 유효 속도 반환
+function Combat.effectiveSpeed(e: Enemy, now: number): number
+	local untilT = e.slowUntil or 0
+	if now < untilT and e.slowFactor then
+		return e.speed * e.slowFactor
+	end
+	return e.speed
 end
 
 return Combat

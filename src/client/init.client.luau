@@ -49,10 +49,10 @@ Hud.build(gui)
 
 -- ============ 인벤토리 ============
 InventoryPanel.build(gui, {
-	onSummon = function()
+	onSummon = function(family)
 		local ev = Net.get("RequestSummon")
 		if ev then
-			ev:FireServer()
+			ev:FireServer(family)
 		end
 	end,
 	onFuse = function(uids)

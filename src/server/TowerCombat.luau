@@ -45,6 +45,14 @@ local function scaledDef(def: any, mult: number)
 	}
 end
 
+-- 둔화 파라미터가 있으면 slow 테이블 반환
+local function slowOf(def: any)
+	if def.slowFactor and def.slowDuration then
+		return { factor = def.slowFactor, duration = def.slowDuration }
+	end
+	return nil
+end
+
 -- 적 처치 보상 처리 (중복 지급 불가: applyHits가 alive=false를 선행)
 local function grantKill(player: Player, enemy: any)
 	local st = Save.get(player)
@@ -84,7 +92,11 @@ local function fireTower(player: Player, tower: any): boolean
 		return false
 	end
 
-	local killed = Combat.applyHits(State.enemies, hits)
+	local now = os.clock()
+	for _, e in State.enemies do
+		e.now = now
+	end
+	local killed = Combat.applyHits(State.enemies, hits, slowOf(def))
 	for _, k in killed do
 		grantKill(player, k)
 		EnemyManager.remove(k.id)

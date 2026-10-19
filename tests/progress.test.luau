@@ -147,7 +147,7 @@ do
 	for _, d in TowerData.all() do
 		table.insert(keys, d.key)
 	end
-	check("타워 4종 존재", #keys == 4)
+	check("타워 12종 존재 (3계열×4단계)", #keys == 12, tostring(#keys))
 
 	check("첫 해금 true", Progress.unlockCollect(st, keys[1]) == true)
 	check("중복 해금 false", Progress.unlockCollect(st, keys[1]) == false)

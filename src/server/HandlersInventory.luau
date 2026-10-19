@@ -42,7 +42,8 @@ local function notify(player: Player, msg: string, kind: string)
 end
 
 -- ============ 소환 ============
-function Handlers.summon(player: Player)
+-- family: "Arcane" | "Frost" | "Inferno" (nil이면 Arcane)
+function Handlers.summon(player: Player, family: any)
 	if not allow(player, "SUMMON") then
 		return
 	end
@@ -50,6 +51,11 @@ function Handlers.summon(player: Player)
 	if not st then
 		return
 	end
+
+	-- 계열 검증 (클라이언트 입력은 신뢰하지 않는다)
+	local fam = type(family) == "string" and TowerData.FAMILY_ROOTS[family] and family or "Arcane"
+	local rootKey = TowerData.FAMILY_ROOTS[fam]
+
 	local ps = Save.ensureProgress(player)
 	local baseCost = Config.SUMMON_COST_BASE * (Config.SUMMON_COST_GROWTH ^ (#st.slots))
 	local cost = math.floor(baseCost * Progress.summonCostMultiplier(ps))
@@ -64,7 +70,7 @@ function Handlers.summon(player: Player)
 	end
 
 	st.gold -= cost
-	local slot = Inventory.add(st, "ApprenticeTurret")
+	local slot = Inventory.add(st, rootKey)
 	local ms = Save.ensureMissions(player)
 	notifyMission(player, Missions.record(ms, "summon", 1))
 

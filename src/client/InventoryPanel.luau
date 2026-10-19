@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local TowerData = require(Shared:WaitForChild("TowerData"))
 
 local UI = require(script.Parent:WaitForChild("UiKit"))
+local TowerCard = require(script.Parent:WaitForChild("TowerCard"))
 
 local InventoryPanel = {}
 
@@ -14,10 +15,9 @@ local slots: { any } = {}
 local cards: { [string]: any } = {}
 
 local scroll: ScrollingFrame
-local summonBtn: TextButton
 local fuseBtn: TextButton
 
-local onSummon: () -> () = function() end
+local onSummon: (family: string) -> () = function() end
 local onFuse: (uids: { string }) -> () = function() end
 
 function InventoryPanel.build(parent: Instance, handlers: { onSummon: any, onFuse: any })
@@ -90,12 +90,43 @@ function InventoryPanel.build(parent: Instance, handlers: { onSummon: any, onFus
 		})
 	end
 
-	summonBtn = mkButton("타워 소환", Color3.fromRGB(50, 120, 80), 1)
-	fuseBtn = mkButton("선택 합성", Color3.fromRGB(120, 80, 200), 2)
+	-- 계열 선택 소환 (3계열)
+	local FAMILY_BTNS = {
+		{ key = "Arcane", label = "아케인", color = Color3.fromRGB(90, 110, 220) },
+		{ key = "Frost", label = "서리", color = Color3.fromRGB(80, 170, 210) },
+		{ key = "Inferno", label = "화염", color = Color3.fromRGB(200, 90, 60) },
+	}
 
-	summonBtn.Activated:Connect(function()
-		onSummon()
-	end)
+	local familyRow = mk(panel, "Frame", {
+		Name = "FamilyRow",
+		Size = UDim2.new(1, -28, 0, 34),
+		Position = UDim2.new(0, 14, 1, -96),
+		BackgroundTransparency = 1,
+	})
+	mk(familyRow, "UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	})
+
+	for i, fb in FAMILY_BTNS do
+		local b = mk(familyRow, "TextButton", {
+			Name = fb.key,
+			Size = UDim2.new(0, 100, 1, 0),
+			LayoutOrder = i,
+			BackgroundColor3 = fb.color,
+			BorderSizePixel = 0,
+			Font = Enum.Font.GothamBold,
+			TextSize = 14,
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			Text = "소환·" .. fb.label,
+		})
+		b.Activated:Connect(function()
+			onSummon(fb.key)
+		end)
+	end
+
+	fuseBtn = mkButton("선택 합성", Color3.fromRGB(120, 80, 200), 2)
 
 	fuseBtn.Activated:Connect(function()
 		local uids = {}
@@ -128,85 +159,6 @@ function InventoryPanel.build(parent: Instance, handlers: { onSummon: any, onFus
 	end)
 end
 
-local function cardFor(uid: string, key: string, order: number, count: number): any
-	local def = TowerData.get(key)
-	local canFuse = def ~= nil and def.nextKey ~= nil
-
-	local card = UI.mk(scroll, "TextButton", {
-		Name = uid,
-		Size = UDim2.new(0, 146, 0, 80),
-		LayoutOrder = order,
-		BackgroundColor3 = selected[uid] and Color3.fromRGB(70, 55, 120) or Color3.fromRGB(28, 32, 44),
-		BorderSizePixel = 0,
-		AutoButtonColor = true,
-		Text = "",
-	})
-
-	UI.mk(card, "TextLabel", {
-		Size = UDim2.new(1, -12, 0, 20),
-		Position = UDim2.new(0, 6, 0, 4),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		TextSize = 14,
-		TextColor3 = Color3.fromRGB(240, 245, 255),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Text = def and def.name or key,
-	})
-	UI.mk(card, "TextLabel", {
-		Size = UDim2.new(1, -12, 0, 16),
-		Position = UDim2.new(0, 6, 0, 24),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.Gotham,
-		TextSize = 11,
-		TextColor3 = Color3.fromRGB(160, 170, 195),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Text = def and string.format("T%d · %s", def.tier, def.attackKind) or "",
-	})
-	UI.mk(card, "TextLabel", {
-		Size = UDim2.new(1, -12, 0, 15),
-		Position = UDim2.new(0, 6, 0, 42),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.Gotham,
-		TextSize = 11,
-		TextColor3 = canFuse and Color3.fromRGB(150, 220, 255) or Color3.fromRGB(110, 115, 130),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Text = canFuse and "합성 가능" or "최종 단계",
-	})
-	UI.mk(card, "TextLabel", {
-		Size = UDim2.new(1, -12, 0, 15),
-		Position = UDim2.new(0, 6, 0, 58),
-		BackgroundTransparency = 1,
-		Font = Enum.Font.Gotham,
-		TextSize = 11,
-		TextColor3 = Color3.fromRGB(200, 180, 120),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Text = string.format("보유 %d개", count),
-	})
-
-	card.Activated:Connect(function()
-		if not canFuse then
-			return
-		end
-		if selected[uid] then
-			selected[uid] = nil
-			card.BackgroundColor3 = Color3.fromRGB(28, 32, 44)
-		else
-			local n = 0
-			for _ in selected do
-				n += 1
-			end
-			if n >= 3 then
-				UI.showNotify("최대 3개까지 선택할 수 있습니다.", "bad")
-				return
-			end
-			selected[uid] = true
-			card.BackgroundColor3 = Color3.fromRGB(70, 55, 120)
-		end
-	end)
-
-	return card
-end
-
 function InventoryPanel.setSlots(newSlots: { any })
 	slots = newSlots or {}
 	-- 서버에 없는 uid 선택 해제
@@ -235,7 +187,33 @@ function InventoryPanel.render()
 		counts[s.key] = (counts[s.key] or 0) + 1
 	end
 	for i, s in slots do
-		cards[s.uid] = cardFor(s.uid, s.key, i, counts[s.key] or 0)
+		cards[s.uid] = TowerCard.create(scroll, {
+			uid = s.uid,
+			key = s.key,
+			order = i,
+			count = counts[s.key] or 0,
+			selected = selected[s.uid] == true,
+			onToggle = function(uid, canFuse, card)
+				if not canFuse then
+					return
+				end
+				if selected[uid] then
+					selected[uid] = nil
+					card.BackgroundColor3 = Color3.fromRGB(28, 32, 44)
+				else
+					local n = 0
+					for _ in selected do
+						n += 1
+					end
+					if n >= 3 then
+						UI.showNotify("최대 3개까지 선택할 수 있습니다.", "bad")
+						return
+					end
+					selected[uid] = true
+					card.BackgroundColor3 = Color3.fromRGB(70, 55, 120)
+				end
+			end,
+		})
 	end
 end
 
