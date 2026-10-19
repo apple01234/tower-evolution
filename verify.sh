@@ -9,7 +9,7 @@ ROJO=/root/workspace/.tools/rojo/rojo
 FAIL=0
 
 echo "=============================================="
-echo " 1/8  Rojo 빌드"
+echo " 1/9  Rojo 빌드"
 echo "=============================================="
 if $ROJO build -o TowerEvolution.rbxlx > /tmp/rojo.log 2>&1; then
 	echo "PASS  빌드 성공 ($(stat -c%s TowerEvolution.rbxlx) bytes)"
@@ -19,7 +19,7 @@ fi
 
 echo
 echo "=============================================="
-echo " 2/8  스크립트 문법 검증"
+echo " 2/9  스크립트 문법 검증"
 echo "=============================================="
 if $LUNE run tests/syntax.test.luau TowerEvolution.rbxlx > /tmp/syntax.log 2>&1; then
 	grep -E "=====" /tmp/syntax.log | sed 's/^/PASS  /'
@@ -29,7 +29,7 @@ fi
 
 echo
 echo "=============================================="
-echo " 3/8  핵심 로직 테스트"
+echo " 3/9  핵심 로직 테스트"
 echo "=============================================="
 if $LUNE run tests/logic.test.luau > /tmp/logic.log 2>&1; then
 	grep -E "=====" /tmp/logic.log | sed 's/^/PASS  /'
@@ -39,7 +39,7 @@ fi
 
 echo
 echo "=============================================="
-echo " 4/8  세계관 데이터 테스트"
+echo " 4/9  세계관 데이터 테스트"
 echo "=============================================="
 if $LUNE run tests/lore.test.luau > /tmp/lore.log 2>&1; then
 	grep -E "=====" /tmp/lore.log | sed 's/^/PASS  /'
@@ -49,7 +49,7 @@ fi
 
 echo
 echo "=============================================="
-echo " 5/8  성장 시스템 테스트 (환생/연구/도감/지역)"
+echo " 5/9  성장 시스템 테스트 (환생/연구/도감/지역)"
 echo "=============================================="
 if $LUNE run tests/progress.test.luau > /tmp/progress.log 2>&1; then
 	grep -E "=====" /tmp/progress.log | sed 's/^/PASS  /'
@@ -59,7 +59,7 @@ fi
 
 echo
 echo "=============================================="
-echo " 6/8  미션 시스템 테스트 (일일/주간)"
+echo " 6/9  미션 시스템 테스트 (일일/주간)"
 echo "=============================================="
 if $LUNE run tests/missions.test.luau > /tmp/missions.log 2>&1; then
 	grep -E "=====" /tmp/missions.log | sed 's/^/PASS  /'
@@ -69,7 +69,7 @@ fi
 
 echo
 echo "=============================================="
-echo " 7/8  3계열 확장 + 둔화 테스트"
+echo " 7/9  3계열 확장 + 둔화 테스트"
 echo "=============================================="
 if $LUNE run tests/expansion.test.luau > /tmp/expansion.log 2>&1; then
 	grep -E "=====" /tmp/expansion.log | sed 's/^/PASS  /'
@@ -79,7 +79,17 @@ fi
 
 echo
 echo "=============================================="
-echo " 8/8  코드 규칙 검사 (SYSTEM_PROMPT.md)"
+echo " 8/9  분기 진화 테스트"
+echo "=============================================="
+if $LUNE run tests/branch.test.luau > /tmp/branch.log 2>&1; then
+	grep -E "=====" /tmp/branch.log | sed 's/^/PASS  /'
+else
+	echo "FAIL  분기 테스트"; grep -B1 -A1 "FAIL" /tmp/branch.log | head -40; FAIL=1
+fi
+
+echo
+echo "=============================================="
+echo " 9/9  코드 규칙 검사 (SYSTEM_PROMPT.md)"
 echo "=============================================="
 if $LUNE run tests/rules.test.luau > /tmp/rules.log 2>&1; then
 	grep -E "규칙 통과|규칙 검사 통과" /tmp/rules.log | sed 's/^/PASS  /'

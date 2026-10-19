@@ -19,17 +19,18 @@ section("3계열 구조")
 do
 	check("계열 3종 정의", #TowerData.FAMILY_KEYS == 3, tostring(#TowerData.FAMILY_KEYS))
 	for _, fam in { "Arcane", "Frost", "Inferno" } do
-		local chain = TowerData.familyChain(fam)
-		check(fam .. " 체인 4단계", #chain == 4, tostring(#chain))
-		if #chain == 4 then
-			check(fam .. " 단계 순서 1..4", chain[1].tier == 1 and chain[4].tier == 4)
-			check(fam .. " 최종은 nextKey 없음", chain[4].nextKey == nil)
-			for i = 1, 3 do
-				check(fam .. " " .. i .. "→" .. (i + 1) .. " 연결", chain[i].nextKey == chain[i + 1].key)
+		local nodes = TowerData.familyChain(fam)
+		-- 1,2,3단계 각 1개 + 4단계 2개(분기) = 5
+		check(fam .. " 노드 5개 (분기 포함)", #nodes == 5, tostring(#nodes))
+		local finals = 0
+		for _, d in nodes do
+			if #TowerData.nextOptions(d.key) == 0 then
+				finals += 1
 			end
 		end
+		check(fam .. " 최종 2개 (분기)", finals == 2, tostring(finals))
 	end
-	check("전체 타워 12종", #TowerData.all() == 12, tostring(#TowerData.all()))
+	check("전체 타워 15종", #TowerData.all() == 15, tostring(#TowerData.all()))
 end
 
 section("계열별 정체성")
@@ -38,11 +39,16 @@ do
 	local frost = TowerData.familyChain("Frost")
 	local inferno = TowerData.familyChain("Inferno")
 
-	check("Arcane 3단계는 Chain", arcane[3].attackKind == "Chain")
-	check("Frost는 둔화 보유", frost[1].slowFactor ~= nil)
-	check("Frost 최종 둔화 강함(<0.5)", (frost[4].slowFactor or 1) < 0.5, tostring(frost[4].slowFactor))
-	check("Inferno 최종 최고 단일 피해", inferno[4].damage == 280, tostring(inferno[4].damage))
-	check("Inferno는 느린 공속", inferno[4].attackSpeed < arcane[4].attackSpeed)
+	local a3 = TowerData.get("ArcaneArtillery")
+	check("Arcane 3단계는 Chain", a3 ~= nil and a3.attackKind == "Chain")
+	local fs = TowerData.get("FrostShard")
+	check("Frost는 둔화 보유", fs ~= nil and fs.slowFactor ~= nil)
+	local fz = TowerData.get("CryoWarden")
+	check("Frost 분기B 둔화 강함(<0.5)", fz ~= nil and (fz.slowFactor or 1) < 0.5, tostring(fz and fz.slowFactor))
+	local fj = TowerData.get("FinalJudgment")
+	check("Inferno 분기A 최고 단일 피해", fj ~= nil and fj.damage == 280, tostring(fj and fj.damage))
+	local pz = TowerData.get("PyreZealot")
+	check("Inferno 분기B는 고속", pz ~= nil and pz.attackSpeed > 1.0, tostring(pz and pz.attackSpeed))
 end
 
 section("DPS 곡선 (계열 간 균형)")
@@ -51,15 +57,16 @@ do
 	for _, fam in { "Arcane", "Frost", "Inferno" } do
 		check(fam .. " 요약 존재", sum[fam] ~= nil)
 		if sum[fam] then
-			print(string.format("  %-8s 최종 %-20s DPS=%.1f", fam, sum[fam].finalName, sum[fam].finalDps))
+			print(string.format("  %-8s 노드 %d · 최종 %d · 최고 DPS %.1f",
+				fam, sum[fam].nodes, sum[fam].finals, sum[fam].maxDps))
 		end
 	end
-	-- 4단계 DPS가 1단계보다 커야 함
+	-- 최고 DPS는 1단계보다 커야 함
 	for _, fam in TowerData.FAMILY_KEYS do
-		local c = TowerData.familyChain(fam)
-		local dps1 = c[1].damage * c[1].attackSpeed
-		local dps4 = c[4].damage * c[4].attackSpeed
-		check(fam .. " 4단계 DPS > 1단계", dps4 > dps1, string.format("%.1f vs %.1f", dps4, dps1))
+		local root = TowerData.get(TowerData.FAMILY_ROOTS[fam])
+		local dps1 = root and (root.damage * root.attackSpeed) or 0
+		check(fam .. " 최고 DPS > 1단계", sum[fam].maxDps > dps1,
+			string.format("%.1f vs %.1f", sum[fam].maxDps, dps1))
 	end
 end
 
@@ -69,6 +76,11 @@ do
 	check("EmberTurret→FlameLance", TowerData.fuseResult("EmberTurret") == "FlameLance")
 	check("최종 단계 합성 불가", TowerData.fuseResult("AbsoluteZero") == nil)
 	check("교차 계열 합성 경로 없음", TowerData.fuseResult("AstralSovereign") == nil)
+	-- 분기: 선택 없이는 nil
+	check("분기점은 선택 없이 nil", TowerData.fuseResult("ArcaneArtillery") == nil)
+	check("분기 선택 A", TowerData.fuseResult("ArcaneArtillery", "AstralSovereign") == "AstralSovereign")
+	check("분기 선택 B", TowerData.fuseResult("ArcaneArtillery", "StellarInquisitor") == "StellarInquisitor")
+	check("잘못된 분기 거부", TowerData.fuseResult("ArcaneArtillery", "AbsoluteZero") == nil)
 end
 
 section("계열 루트 무결성")

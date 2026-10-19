@@ -91,7 +91,7 @@ local function firstKeyOf(st: any, uids: { string }): string?
 	return nil
 end
 
-function Handlers.fuse(player: Player, uids: any)
+function Handlers.fuse(player: Player, uids: any, chosen: any)
 	if not allow(player, "FUSE") then
 		return
 	end
@@ -107,17 +107,33 @@ function Handlers.fuse(player: Player, uids: any)
 	local def = firstKey and TowerData.get(firstKey) or nil
 	local fuseCost = def and def.fuseCost or 0
 
+	-- 분기 진화: 선택 키 검증 (클라이언트 입력 신뢰 금지)
+	local options = firstKey and TowerData.nextOptions(firstKey) or {}
+	local nextKey: string?
+	if #options == 0 then
+		notify(player, "더 이상 진화할 수 없습니다.", "bad")
+		return
+	end
+	if #options >= 2 then
+		if type(chosen) ~= "string" then
+			notify(player, "진화 방향을 선택해야 합니다.", "bad")
+			return
+		end
+		nextKey = TowerData.fuseResult(firstKey, chosen)
+		if not nextKey then
+			notify(player, "잘못된 진화 경로입니다.", "bad")
+			return
+		end
+	else
+		nextKey = options[1]
+	end
+
 	local result = Inventory.fuse(st, { uids = uids }, fuseCost, Config.INVENTORY_CAP)
 	if not result.ok then
 		notify(player, "합성 실패: " .. tostring(result.err), "bad")
 		return
 	end
 
-	local nextKey = firstKey and TowerData.fuseResult(firstKey) or nil
-	if not nextKey then
-		notify(player, "더 이상 진화할 수 없습니다.", "bad")
-		return
-	end
 	if not Inventory.commitFuse(st, result, nextKey, Config.INVENTORY_CAP) then
 		notify(player, "합성 처리 중 오류.", "bad")
 		return

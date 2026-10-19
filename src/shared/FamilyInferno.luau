@@ -1,5 +1,6 @@
 --!strict
--- Inferno 계열 (고화력 저속)
+-- Inferno 계열: 단일 → 관통 → [분기] 광역 폭발 / 고속 연사
+-- 3단계(BlastForge)에서 두 갈래로 나뉜다.
 local Towers: { [string]: any } = {}
 
 local function def(d: any): any
@@ -7,7 +8,6 @@ local function def(d: any): any
 	return d
 end
 
--- ============ Inferno 계열 ============
 def({
 	key = "EmberTurret",
 	name = "잔불 포탑",
@@ -19,7 +19,7 @@ def({
 	range = 12,
 	attackKind = "Single",
 	projectileSpeed = 50,
-	nextKey = "FlameLance",
+	nextKeys = { "FlameLance" },
 	fuseCost = 75,
 	collectionHint = "무료 계열 루트 (소환)",
 })
@@ -36,11 +36,12 @@ def({
 	attackKind = "Pierce",
 	projectileSpeed = 60,
 	pierceCount = 2,
-	nextKey = "BlastForge",
+	nextKeys = { "BlastForge" },
 	fuseCost = 150,
 	collectionHint = "잔불 포탑 3개 합성",
 })
 
+-- ============ 분기점: 3단계 ============
 def({
 	key = "BlastForge",
 	name = "폭발 용광로",
@@ -53,11 +54,12 @@ def({
 	attackKind = "Aoe",
 	projectileSpeed = 65,
 	aoeRadius = 8,
-	nextKey = "FinalJudgment",
+	nextKeys = { "FinalJudgment", "PyreZealot" },
 	fuseCost = 400,
-	collectionHint = "화염 창 3개 합성",
+	collectionHint = "화염 창 3개 합성 후 진화 방향 선택",
 })
 
+-- ============ 분기 A: 초광역 심판 ============
 def({
 	key = "FinalJudgment",
 	name = "최종 심판",
@@ -70,9 +72,27 @@ def({
 	attackKind = "Aoe",
 	projectileSpeed = 60,
 	aoeRadius = 10,
-	nextKey = nil,
+	nextKeys = {},
 	fuseCost = 0,
-	collectionHint = "폭발 용광로 3개 합성",
+	collectionHint = "폭발 용광로 → 초광역 분기",
+})
+
+-- ============ 분기 B: 고속 연사 (관통) ============
+def({
+	key = "PyreZealot",
+	name = "화형 광신도",
+	tier = 4,
+	rarity = "Legendary",
+	family = "Inferno",
+	damage = 88,
+	attackSpeed = 1.4,
+	range = 16,
+	attackKind = "Pierce",
+	projectileSpeed = 130,
+	pierceCount = 4,
+	nextKeys = {},
+	fuseCost = 0,
+	collectionHint = "폭발 용광로 → 연사 분기",
 })
 
 return Towers

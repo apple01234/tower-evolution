@@ -1,5 +1,6 @@
 --!strict
--- Frost 계열 (제어 특화, 둔화)
+-- Frost 계열: 단일 → 관통(둔화) → [분기] 광역 빙결 / 집중 냉동
+-- 3단계(Permafrost)에서 두 갈래로 나뉜다.
 local Towers: { [string]: any } = {}
 
 local function def(d: any): any
@@ -7,7 +8,6 @@ local function def(d: any): any
 	return d
 end
 
--- ============ Frost 계열 ============
 def({
 	key = "FrostShard",
 	name = "서리 파편",
@@ -21,7 +21,7 @@ def({
 	projectileSpeed = 55,
 	slowFactor = 0.88,
 	slowDuration = 1.0,
-	nextKey = "GlacierSpike",
+	nextKeys = { "GlacierSpike" },
 	fuseCost = 75,
 	collectionHint = "무료 계열 루트 (소환)",
 })
@@ -40,11 +40,12 @@ def({
 	pierceCount = 2,
 	slowFactor = 0.8,
 	slowDuration = 1.4,
-	nextKey = "Permafrost",
+	nextKeys = { "Permafrost" },
 	fuseCost = 150,
 	collectionHint = "서리 파편 3개 합성",
 })
 
+-- ============ 분기점: 3단계 ============
 def({
 	key = "Permafrost",
 	name = "영구 동토",
@@ -59,11 +60,12 @@ def({
 	aoeRadius = 7,
 	slowFactor = 0.65,
 	slowDuration = 2.0,
-	nextKey = "AbsoluteZero",
+	nextKeys = { "AbsoluteZero", "CryoWarden" },
 	fuseCost = 400,
-	collectionHint = "빙하 쐐기 3개 합성",
+	collectionHint = "빙하 쐐기 3개 합성 후 진화 방향 선택",
 })
 
+-- ============ 분기 A: 광역 절대영도 ============
 def({
 	key = "AbsoluteZero",
 	name = "절대영도",
@@ -78,9 +80,28 @@ def({
 	aoeRadius = 11,
 	slowFactor = 0.45,
 	slowDuration = 3.0,
-	nextKey = nil,
+	nextKeys = {},
 	fuseCost = 0,
-	collectionHint = "영구 동토 3개 합성",
+	collectionHint = "영구 동토 → 광역 분기",
+})
+
+-- ============ 분기 B: 집중 냉동 (강한 둔화, 단일) ============
+def({
+	key = "CryoWarden",
+	name = "극저온 파수꾼",
+	tier = 4,
+	rarity = "Legendary",
+	family = "Frost",
+	damage = 150,
+	attackSpeed = 1.3,
+	range = 17,
+	attackKind = "Single",
+	projectileSpeed = 90,
+	slowFactor = 0.25,
+	slowDuration = 4.0,
+	nextKeys = {},
+	fuseCost = 0,
+	collectionHint = "영구 동토 → 집중 냉동 분기",
 })
 
 return Towers

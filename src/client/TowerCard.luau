@@ -20,7 +20,7 @@ export type Opts = {
 
 function TowerCard.create(parent: Instance, o: Opts): Instance
 	local def = TowerData.get(o.key)
-	local canFuse = def ~= nil and def.nextKey ~= nil
+	local canFuse = def ~= nil and #TowerData.nextOptions(o.key) > 0
 
 	local card = UI.mk(parent, "TextButton", {
 		Name = o.uid,
@@ -60,7 +60,9 @@ function TowerCard.create(parent: Instance, o: Opts): Instance
 		TextSize = 11,
 		TextColor3 = canFuse and Color3.fromRGB(150, 220, 255) or Color3.fromRGB(110, 115, 130),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Text = canFuse and "합성 가능" or "최종 단계",
+		Text = canFuse
+			and (TowerData.requiresChoice(o.key) and "분기 선택" or "합성 가능")
+			or "최종 단계",
 	})
 	UI.mk(card, "TextLabel", {
 		Size = UDim2.new(1, -12, 0, 15),

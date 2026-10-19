@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local TowerData = require(Shared:WaitForChild("TowerData"))
 
 local UI = require(script.Parent:WaitForChild("UiKit"))
+local BranchDialog = require(script.Parent:WaitForChild("BranchDialog"))
 local TowerCard = require(script.Parent:WaitForChild("TowerCard"))
 
 local InventoryPanel = {}
@@ -153,7 +154,27 @@ function InventoryPanel.build(parent: Instance, handlers: { onSummon: any, onFus
 			UI.showNotify("서로 다른 타워는 합성할 수 없습니다.", "bad")
 			return
 		end
-		onFuse(uids)
+
+		-- 합성 대상 key 확인
+		local targetKey = nil
+		for k in keys do
+			targetKey = k
+			break
+		end
+		if not targetKey then
+			return
+		end
+
+		-- 분기가 있으면 선택 팝업, 없으면 바로 전송
+		if TowerData.requiresChoice(targetKey) then
+			if BranchDialog.open(uids, targetKey) then
+				selected = {}
+				InventoryPanel.render()
+				return
+			end
+		end
+
+		onFuse(uids, nil)
 		selected = {}
 		InventoryPanel.render()
 	end)

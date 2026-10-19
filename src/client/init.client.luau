@@ -11,6 +11,7 @@ local UI = require(script.Parent:WaitForChild("UiKit"))
 local Hud = require(script.Parent:WaitForChild("Hud"))
 local InventoryPanel = require(script.Parent:WaitForChild("InventoryPanel"))
 local GrowthPanel = require(script.Parent:WaitForChild("GrowthPanel"))
+local BranchDialog = require(script.Parent:WaitForChild("BranchDialog"))
 local MissionPanel = require(script.Parent:WaitForChild("MissionPanel"))
 
 local mk = UI.mk
@@ -55,10 +56,10 @@ InventoryPanel.build(gui, {
 			ev:FireServer(family)
 		end
 	end,
-	onFuse = function(uids)
+	onFuse = function(uids, chosen)
 		local ev = Net.get("RequestFuse")
 		if ev then
-			ev:FireServer(uids)
+			ev:FireServer(uids, chosen)
 		end
 	end,
 })
@@ -102,6 +103,14 @@ growthBtn.Activated:Connect(function()
 end)
 missionBtn.Activated:Connect(function()
 	MissionPanel.toggle()
+end)
+
+-- ============ 분기 선택 팝업 ============
+BranchDialog.build(gui, function(uids, chosen)
+	local ev = Net.get("RequestFuse")
+	if ev then
+		ev:FireServer(uids, chosen)
+	end
 end)
 
 -- ============ 서버 이벤트 ============

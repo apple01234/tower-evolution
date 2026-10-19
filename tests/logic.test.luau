@@ -24,10 +24,11 @@ end
 
 -- ============ 1. 타워 데이터 ============
 section("TowerData")
-check("4단계 체인 존재", #TowerData.chain("ApprenticeTurret") == 4)
+check("체인 4단계 (첫 경로 기준)", #TowerData.chain("ApprenticeTurret") == 4, tostring(#TowerData.chain("ApprenticeTurret")))
 check("견습→수정", TowerData.fuseResult("ApprenticeTurret") == "CrystalTurret")
 check("수정→아케인", TowerData.fuseResult("CrystalTurret") == "ArcaneArtillery")
-check("아케인→성운", TowerData.fuseResult("ArcaneArtillery") == "AstralSovereign")
+check("아케인은 분기점(선택 필요)", TowerData.requiresChoice("ArcaneArtillery"))
+check("아케인→성운 (선택 시)", TowerData.fuseResult("ArcaneArtillery", "AstralSovereign") == "AstralSovereign")
 check("성운은 최종(합성 불가)", TowerData.fuseResult("AstralSovereign") == nil)
 check("미존재 키 반환 nil", TowerData.get("NoSuchTower") == nil)
 
