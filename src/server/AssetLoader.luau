@@ -1,58 +1,90 @@
 --!strict
--- 마켓플레이스 에셋 로더 — 절차적 생성 대신 Roblox 무료 모델을 사용한다.
+-- 에셋 로더 (3단계 우선순위)
+--   1) ReplicatedStorage.AssetBundles 에 Rojo 로 구워진 모델 (즉시, 인증 불필요)
+--   2) InsertService:LoadAsset (런타임, 서버 전용, 실패 가능)
+--   3) 호출측의 절차적 파트 폴백
 --
--- 공식 문서 근거 (API-Dump version-d0e8cfcd943d4ae2 로 시그니처 확인):
---   InsertService:LoadAsset(assetId: int64) -> Instance
---   Model:GetBoundingBox() -> Tuple            (CFrame, Vector3)
---   Model:ScaleTo(newScaleFactor: float) -> null
---   Model:GetScale() -> float
---   Model:PivotTo()  — Model에는 없음. WorldPivot/PrimaryPart 사용 또는 :PivotTo()는 PVInstance
---
--- LoadAsset은 서버 Script 전용이며 실패할 수 있으므로 반드시 pcall로 감싼다.
--- 에셋이 로드되지 않으면 절차적 폴백을 쓴다 (게임이 멈추지 않게).
+-- 공식 문서 근거 (API-Dump version-d0e8cfcd943d4ae2):
+--   InsertService:LoadAsset(assetId: int64) -> Instance   [capability LoadOwnedAsset, yields]
+--   Model:GetBoundingBox() -> Tuple (CFrame, Vector3)
+--   Model:ScaleTo(float) -> null ; Model:PivotTo() 는 PVInstance 상속
 
 local InsertService = game:GetService("InsertService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local AssetLoader = {}
 
-local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
 local AssetCatalog = require(Shared:WaitForChild("AssetCatalog"))
 
--- 카탈로그: AssetCatalog.luau (검증된 무료 모델만)
 AssetLoader.CATALOG = AssetCatalog.CATALOG
 
-local cache: { [number]: Instance } = {}
-local failed: { [number]: boolean } = {}
+local runtimeCache: { [number]: Instance } = {}
+local runtimeFailed: { [number]: boolean } = {}
 
--- 에셋 1회 로드 후 캐시. 실패 시 nil.
-function AssetLoader.load(assetId: number): Instance?
-	if cache[assetId] then
-		return cache[assetId]
+-- 구워진 번들 폴더 (없으면 nil)
+local function bundles(): Folder?
+	local f = ReplicatedStorage:FindFirstChild("AssetBundles")
+	return if f and f:IsA("Folder") then f else nil
+end
+
+-- 1단계: 구워진 에셋 조회
+local function baked(key: string): Instance?
+	local folder = bundles()
+	if not folder then
+		return nil
 	end
-	if failed[assetId] then
+
+	-- 자식 이름이 key 와 정확히 일치
+	local direct = folder:FindFirstChild(key)
+	if direct then
+		return direct
+	end
+
+	-- Rojo 가 확장자를 이름에 남긴 경우 (key.rbxm 등) 대비
+	for _, child in folder:GetChildren() do
+		local base = string.match(child.Name, "^(.+)%.rbxm[x]?$")
+		if base == key then
+			return child
+		end
+	end
+	return nil
+end
+
+-- 2단계: 런타임 로드 (캐시)
+function AssetLoader.load(assetId: number): Instance?
+	if runtimeCache[assetId] then
+		return runtimeCache[assetId]
+	end
+	if runtimeFailed[assetId] then
 		return nil
 	end
 
 	local ok, result = pcall(InsertService.LoadAsset, InsertService, assetId)
 	if not ok or not result then
-		warn(string.format("[AssetLoader] 로드 실패 id=%d: %s", assetId, tostring(result)))
-		failed[assetId] = true
+		warn(string.format("[AssetLoader] 런타임 로드 실패 id=%d: %s", assetId, tostring(result)))
+		runtimeFailed[assetId] = true
 		return nil
 	end
 
-	cache[assetId] = result
+	runtimeCache[assetId] = result
 	return result
 end
 
+-- key 로 원본 인스턴스 획득 (구워진 것 우선)
 function AssetLoader.loadKey(key: string): Instance?
-	local entry = AssetLoader.CATALOG[key]
-	if not entry then
-		return nil
+	local b = baked(key)
+	if b then
+		return b
 	end
-	return AssetLoader.load(entry.id)
+	local entry = AssetCatalog.get(key)
+	if entry then
+		return AssetLoader.load(entry.id)
+	end
+	return nil
 end
 
--- 복제본을 반환. 원본은 캐시에 보존하고 파괴하지 않는다.
+-- 복제본 반환. 원본은 절대 파괴하지 않는다.
 function AssetLoader.template(key: string): Instance?
 	local base = AssetLoader.loadKey(key)
 	if not base then
@@ -61,13 +93,11 @@ function AssetLoader.template(key: string): Instance?
 	return base:Clone()
 end
 
--- 모델을 목표 크기에 맞춰 스케일 조정. 성공 시 true.
--- GetBoundingBox는 Tuple(CFrame, Vector3) 반환.
+-- 모델을 목표 크기에 맞춰 스케일. GetBoundingBox 는 Tuple 반환.
 function AssetLoader.fit(model: Instance, targetSize: Vector3): boolean
 	if not model:IsA("Model") then
 		return false
 	end
-
 	local okBox, _, size = pcall(model.GetBoundingBox, model)
 	if not okBox or typeof(size) ~= "Vector3" then
 		return false
@@ -75,64 +105,81 @@ function AssetLoader.fit(model: Instance, targetSize: Vector3): boolean
 	if size.X <= 0 or size.Y <= 0 or size.Z <= 0 then
 		return false
 	end
-
 	local scale = math.min(targetSize.X / size.X, targetSize.Y / size.Y, targetSize.Z / size.Z)
 	if scale <= 0 or scale == math.huge or scale ~= scale then
 		return false
 	end
-
-	local okScale = pcall(model.ScaleTo, model, scale)
-	return okScale
+	return pcall(model.ScaleTo, model, scale)
 end
 
--- 모델을 특정 셀 위치에 정렬 (바닥 기준)
+-- 바닥 기준으로 배치
 function AssetLoader.place(model: Instance, at: Vector3): boolean
 	if not model:IsA("Model") then
 		return false
 	end
 	local okBox, bbox, size = pcall(model.GetBoundingBox, model)
-	if not okBox or typeof(bbox) ~= "CFrame" then
+	if not okBox or typeof(bbox) ~= "CFrame" or typeof(size) ~= "Vector3" then
 		return false
 	end
-	-- 바운딩박스 중심의 Y를 바닥(size.Y/2)에 맞춘다
 	local offset = Vector3.new(0, size.Y / 2, 0)
-	local okPivot = pcall(function()
+	return pcall(function()
 		model:PivotTo(CFrame.new(at + offset))
 	end)
-	return okPivot
+end
+
+-- 구워진 에셋 개수 (Studio 즉시 확인용)
+function AssetLoader.bakedCount(): number
+	local folder = bundles()
+	if not folder then
+		return 0
+	end
+	local n = 0
+	for _ in folder:GetChildren() do
+		n += 1
+	end
+	return n
 end
 
 function AssetLoader.stats(): (number, number)
 	local okn, failn = 0, 0
-	for _ in cache do
+	for _ in runtimeCache do
 		okn += 1
 	end
-	for _ in failed do
+	for _ in runtimeFailed do
 		failn += 1
 	end
 	return okn, failn
 end
 
--- Studio 진단용: 카탈로그 전체를 실제로 로드해 성공/실패를 출력한다.
--- 이 환경에서는 Studio가 없어 실행 불가 — Studio에서 호출해 확인할 것.
+-- 진단: 구워진 것과 런타임 로드를 모두 확인
 function AssetLoader.diagnose()
-	print("[AssetLoader] 진단 시작")
-	local okn, failn = 0, 0
-	for key, entry in AssetLoader.CATALOG do
-		local ok, result = pcall(InsertService.LoadAsset, InsertService, entry.id)
-		if ok and result then
-			local okBox, _, size = pcall(result.GetBoundingBox, result)
+	print(string.format("[AssetLoader] 구워진 에셋: %d개", AssetLoader.bakedCount()))
+
+	local bakedOk, bakedFail, runtimeOk, runtimeFail = 0, 0, 0, 0
+	for key, _ in AssetCatalog.CATALOG do
+		local b = baked(key)
+		if b then
+			local okBox, _, size = pcall((b :: any).GetBoundingBox, b)
 			local desc = okBox and string.format("%.1f x %.1f x %.1f", size.X, size.Y, size.Z) or "bbox?"
-			print(string.format("  OK    %-18s id=%-14d %s", key, entry.id, desc))
-			result:Destroy()
-			okn += 1
+			print(string.format("  BAKED %-20s %s", key, desc))
+			bakedOk += 1
 		else
-			print(string.format("  FAIL  %-18s id=%-14d %s", key, entry.id, tostring(result)))
-			failn += 1
+			bakedFail += 1
+			local entry = AssetCatalog.get(key)
+			local ok, result = pcall(InsertService.LoadAsset, InsertService, entry.id)
+			if ok and result then
+				runtimeOk += 1
+				print(string.format("  RUNTIME %-18s id=%d (구워지지 않음)", key, entry.id))
+				result:Destroy()
+			else
+				runtimeFail += 1
+				print(string.format("  FAIL  %-20s id=%d %s", key, entry.id, tostring(result)))
+			end
+			task.wait(0.2)
 		end
-		task.wait(0.25)
 	end
-	print(string.format("[AssetLoader] 진단 완료 — %d OK, %d FAIL", okn, failn))
+	print(string.format("[AssetLoader] 구워짐 %d / 런타임 %d / 실패 %d", bakedOk, runtimeOk, runtimeFail))
+	_ = bakedFail
 end
 
 return AssetLoader
