@@ -19,6 +19,7 @@ local State = require(script.Parent:WaitForChild("BattleState"))
 local TowerCombat = require(script.Parent:WaitForChild("TowerCombat"))
 local Waves = require(script.Parent:WaitForChild("Waves"))
 local WorldSetup = require(script.Parent:WaitForChild("WorldSetup"))
+local Diag = require(script.Parent:WaitForChild("Diag"))
 
 local Battle = {}
 
@@ -80,12 +81,20 @@ function Battle.init()
 	Growth.inject({ allow = allow })
 
 	-- 월드 생성 (첫 지역 테마)
-	WorldSetup.build("Midgard_Forest")
+	Diag.log("== Battle.init ==")
+	if not Diag.step("WorldSetup.build", function()
+		WorldSetup.build("Midgard_Forest")
+	end) then
+		Diag.log("  -> 이후 단계 중단")
+		return
+	end
 	local arena = workspace:FindFirstChild("TowerArena")
 	if not arena then
+		Diag.log("FAIL TowerArena 없음")
 		warn("[Battle] TowerArena 생성 실패")
 		return
 	end
+	Diag.log("OK   TowerArena (" .. tostring(#arena:GetChildren()) .. " children)")
 
 	local folder = Instance.new("Folder")
 	folder.Name = "Enemies"
@@ -130,8 +139,9 @@ function Battle.init()
 		rateLimit[player.UserId] = nil
 	end)
 
-	-- 웨이브 루프
+	-- 웨이브 루프 (Waves.run 은 while true 라 pcall 로 감싸면 반환하지 않는다)
 	task.spawn(Waves.run)
+	Diag.log("OK   Waves.run 스폰됨")
 
 	-- 협동 보스 자동 등장 루프
 	task.spawn(function()
@@ -147,13 +157,44 @@ function Battle.init()
 	end)
 
 	-- 프레임 루프
+	local beats = 0
+	local lastReport = 0
 	RunService.Heartbeat:Connect(function(dt)
-		CoopBossServer.tick()
-		local anyHit = EnemyManager.update(dt, Waves.onBaseHit)
-		if anyHit then
+		beats += 1
+		if beats == 1 then
+			Diag.log("OK   Heartbeat 첫 프레임")
+		end
+		local ok1, e1 = pcall(CoopBossServer.tick)
+		if not ok1 then
+			Diag.log("FAIL CoopBossServer.tick: " .. tostring(e1))
+		end
+		local ok2, anyHit = pcall(EnemyManager.update, dt, Waves.onBaseHit)
+		if not ok2 then
+			Diag.log("FAIL EnemyManager.update: " .. tostring(anyHit))
+		elseif anyHit then
 			Waves.broadcast()
 		end
-		TowerCombat.update(dt)
+		local ok3, e3 = pcall(TowerCombat.update, dt)
+		if not ok3 then
+			Diag.log("FAIL TowerCombat.update: " .. tostring(e3))
+		end
+		-- 3초마다 상태 요약
+		local now = os.clock()
+		if now - lastReport >= 3 then
+			lastReport = now
+			Diag.log(string.format("beat=%d wave=%d enemies=%d towers=%d",
+				beats, State.wave, (function()
+					local n = 0
+					for _ in State.enemies do n += 1 end
+					return n
+				end)(), (function()
+					local n = 0
+					for _, cells in State.placed do
+						for _ in cells do n += 1 end
+					end
+					return n
+				end)()))
+		end
 	end)
 end
 
