@@ -9,7 +9,7 @@
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
       "Shared": { "$path": "src/shared" },
-      "AssetBundles": { "$path": "assets_clean" }
+      "AssetBundles": { "$path": "assets_fresh_clean" }
     },
     "ServerScriptService": {
       "$className": "ServerScriptService",
